@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 700" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Stylized chest radiograph with right lower opacification suggestive of pleural effusion">
+  <defs>
+    <radialGradient id="stage" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#1a1f28"/>
+      <stop offset="70%" stop-color="#0b0e13"/>
+      <stop offset="100%" stop-color="#04060a"/>
+    </radialGradient>
+    <radialGradient id="torso" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#3a4150" stop-opacity="0.95"/>
+      <stop offset="60%" stop-color="#242a34" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#141821" stop-opacity="0.6"/>
+    </radialGradient>
+    <radialGradient id="lung" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="85%" stop-color="#1c222d"/>
+      <stop offset="100%" stop-color="#2a303c"/>
+    </radialGradient>
+    <radialGradient id="heart" cx="50%" cy="55%" r="70%">
+      <stop offset="0%" stop-color="#5a6272" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#2e3440" stop-opacity="0.6"/>
+    </radialGradient>
+    <radialGradient id="effusion" cx="50%" cy="80%" r="70%">
+      <stop offset="0%" stop-color="#a8b0c0" stop-opacity="0.92"/>
+      <stop offset="60%" stop-color="#6b7385" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#3a4050" stop-opacity="0.2"/>
+    </radialGradient>
+    <radialGradient id="opacity" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#8a92a4" stop-opacity="0.85"/>
+      <stop offset="70%" stop-color="#4b5362" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#2a303c" stop-opacity="0.05"/>
+    </radialGradient>
+    <linearGradient id="spineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5c6474"/>
+      <stop offset="50%" stop-color="#6d7687"/>
+      <stop offset="100%" stop-color="#4a5263"/>
+    </linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="1.4"/></filter>
+    <filter id="softer"><feGaussianBlur stdDeviation="7"/></filter>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="12"/>
+      <feColorMatrix values="0 0 0 0 0.06  0 0 0 0 0.06  0 0 0 0 0.08  0 0 0 0.16 0"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+    </filter>
+  </defs>
+
+  <rect width="600" height="700" fill="url(#stage)"/>
+  <ellipse cx="300" cy="360" rx="255" ry="310" fill="url(#torso)"/>
+
+  <g filter="url(#soft)">
+    <ellipse cx="180" cy="380" rx="115" ry="205" fill="url(#lung)"/>
+    <ellipse cx="420" cy="380" rx="115" ry="205" fill="url(#lung)"/>
+  </g>
+
+  <!-- Right lower zone opacity + blunted costophrenic angle -->
+  <g filter="url(#softer)">
+    <ellipse cx="455" cy="560" rx="105" ry="75" fill="url(#effusion)"/>
+    <ellipse cx="430" cy="470" rx="80" ry="55" fill="url(#opacity)" opacity="0.75"/>
+  </g>
+
+  <g opacity="0.88">
+    <path d="M 260 420 Q 240 520 310 560 Q 380 550 370 470 Q 360 400 320 400 Z" fill="url(#heart)"/>
+  </g>
+
+  <g stroke="#868f9f" stroke-width="2.4" fill="none" opacity="0.78" stroke-linecap="round">
+    <path d="M 85 155 Q 175 130 275 165"/>
+    <path d="M 325 165 Q 425 130 515 155"/>
+  </g>
+
+  <rect x="288" y="140" width="24" height="500" rx="9" fill="url(#spineGrad)" opacity="0.85"/>
+  <g stroke="#323845" stroke-width="1.2" opacity="0.7">
+    <line x1="292" y1="205" x2="308" y2="205"/>
+    <line x1="292" y1="245" x2="308" y2="245"/>
+    <line x1="292" y1="285" x2="308" y2="285"/>
+    <line x1="292" y1="325" x2="308" y2="325"/>
+    <line x1="292" y1="365" x2="308" y2="365"/>
+    <line x1="292" y1="405" x2="308" y2="405"/>
+    <line x1="292" y1="445" x2="308" y2="445"/>
+    <line x1="292" y1="485" x2="308" y2="485"/>
+    <line x1="292" y1="525" x2="308" y2="525"/>
+    <line x1="292" y1="565" x2="308" y2="565"/>
+  </g>
+
+  <g stroke="#aab3c2" stroke-width="2.2" fill="none" opacity="0.55" stroke-linecap="round">
+    <path d="M 80 200 Q 190 180 280 230"/>
+    <path d="M 320 230 Q 410 180 520 200"/>
+    <path d="M 75 245 Q 190 220 280 275"/>
+    <path d="M 320 275 Q 410 220 525 245"/>
+    <path d="M 72 290 Q 190 265 280 320"/>
+    <path d="M 320 320 Q 410 265 528 290"/>
+    <path d="M 70 335 Q 190 310 280 365"/>
+    <path d="M 320 365 Q 410 310 530 335"/>
+    <path d="M 70 380 Q 190 355 280 410"/>
+    <path d="M 320 410 Q 410 355 530 380"/>
+    <path d="M 72 425 Q 190 400 280 455"/>
+    <path d="M 320 455 Q 410 400 528 425"/>
+    <path d="M 76 470 Q 190 445 280 500"/>
+    <path d="M 320 500 Q 410 445 524 470"/>
+  </g>
+
+  <g stroke="#6a7384" stroke-width="1.4" fill="none" opacity="0.5" stroke-linecap="round">
+    <path d="M 260 420 Q 210 450 150 470"/>
+    <path d="M 260 420 Q 230 480 180 540"/>
+    <path d="M 340 420 Q 390 450 450 470"/>
+  </g>
+
+  <g opacity="0.78">
+    <path d="M 85 600 Q 180 640 280 615 L 280 660 Q 180 640 85 650 Z" fill="#2e3540"/>
+    <!-- Right hemi-diaphragm blunted by effusion -->
+    <path d="M 320 615 Q 400 625 515 600 L 515 660 Q 400 650 320 660 Z" fill="#3c4452"/>
+  </g>
+
+  <rect width="600" height="700" filter="url(#grain)" opacity="0.55"/>
+</svg>
