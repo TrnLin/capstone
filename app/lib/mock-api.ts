@@ -16,7 +16,12 @@ import {
   type AnatomicalBlob,
 } from "./labels"
 
-export type SourceDataset = "NIH" | "CheXpert" | "VinDr-CXR" | "PadChest"
+export type SourceDataset =
+  | "NIH"
+  | "CheXpert"
+  | "VinDr-CXR"
+  | "PadChest"
+  | "Backend"
 
 export type OccurrenceBlob = AnatomicalBlob & {
   /** relative intensity in [0, 1] */
