@@ -230,6 +230,15 @@ function HistoryRow({
   const topPrediction = item.cachedResult?.predictions.find(
     (p) => p.probability >= 0.35
   )
+  const statusText =
+    item.errorMessage ??
+    (item.jobStatus === "queued"
+      ? "queued"
+      : item.jobStatus === "processing"
+        ? "processing"
+        : item.jobStatus === "failed"
+          ? "failed"
+          : null)
 
   return (
     <li
@@ -277,6 +286,10 @@ function HistoryRow({
               </span>
             ) : item.cachedResult ? (
               <span>No finding</span>
+            ) : statusText ? (
+              <span className={cn("truncate", item.jobStatus === "failed" && "text-destructive")}>
+                {statusText}
+              </span>
             ) : (
               <span className="italic">pending</span>
             )}

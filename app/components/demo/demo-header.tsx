@@ -1,12 +1,25 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router"
-import { MoonIcon, SunIcon } from "lucide-react"
+import { LogInIcon, LogOutIcon, MoonIcon, SunIcon, UserCircleIcon } from "lucide-react"
 
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import type { UserResponse } from "~/lib/backend-api"
 import { cn } from "~/lib/utils"
 
-export function DemoHeader() {
+type DemoHeaderProps = {
+  user: UserResponse | null
+  authLoading: boolean
+  onAuthClick: () => void
+  onLogout: () => void
+}
+
+export function DemoHeader({
+  user,
+  authLoading,
+  onAuthClick,
+  onLogout,
+}: DemoHeaderProps) {
   const [theme, setTheme] = useState<"light" | "dark">("light")
 
   useEffect(() => {
@@ -44,12 +57,12 @@ export function DemoHeader() {
         <Badge
           variant="outline"
           className={cn(
-            "ml-2 gap-1.5 border-amber-500/30 bg-amber-500/10 text-amber-700",
-            "dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200"
+            "ml-2 hidden gap-1.5 border-sky-500/30 bg-sky-500/10 text-sky-700 sm:inline-flex",
+            "dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-200"
           )}
         >
-          <span className="size-1.5 rounded-full bg-amber-500" />
-          demo mode
+          <span className="size-1.5 rounded-full bg-sky-500" />
+          backend mock
         </Badge>
 
         <div className="flex-1" />
@@ -61,6 +74,44 @@ export function DemoHeader() {
         >
           legacy ui
         </Link>
+
+        {user ? (
+          <>
+            <div className="hidden min-w-0 items-center gap-2 rounded-full bg-muted px-2 py-1 sm:flex">
+              <UserCircleIcon className="size-4 shrink-0 text-muted-foreground" />
+              <span className="max-w-44 truncate text-xs font-medium">
+                {user.email}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={onLogout}
+                aria-label="Log out"
+              >
+                <LogOutIcon />
+              </Button>
+            </div>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={onLogout}
+              aria-label={`Log out ${user.email}`}
+              className="sm:hidden"
+            >
+              <LogOutIcon />
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onAuthClick}
+            disabled={authLoading}
+          >
+            <LogInIcon />
+            {authLoading ? "Checking" : "Login"}
+          </Button>
+        )}
 
         <Button
           variant="ghost"

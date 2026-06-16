@@ -6,6 +6,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "~/components/ui/alert"
+import { AuthDialog } from "~/components/demo/auth-dialog"
 import { Button } from "~/components/ui/button"
 import { ControlsPanel } from "~/components/demo/controls-panel"
 import { DemoHeader } from "~/components/demo/demo-header"
@@ -14,7 +15,15 @@ import { JsonInspector } from "~/components/demo/json-inspector"
 import { PredictionList } from "~/components/demo/prediction-list"
 import { PrototypeGallery } from "~/components/demo/prototype-gallery"
 import { Viewer } from "~/components/demo/viewer"
-import { mockInfer } from "~/lib/mock-api"
+import {
+  ApiError,
+  createBackendApiClient,
+  type PredictionDetail,
+  type PredictionJob,
+  type PredictionSummary,
+  type UserResponse,
+} from "~/lib/backend-api"
+import { normalizeBackendPredictionResponse } from "~/lib/backend-adapter"
 import type { InferenceResult } from "~/lib/mock-api"
 import { SAMPLES, SAMPLES_BY_ID } from "~/lib/samples"
 import type { Sample } from "~/lib/samples"
@@ -40,27 +49,22 @@ function makeId() {
   return `hist_${Math.random().toString(36).slice(2, 9)}_${Date.now().toString(36)}`
 }
 
-function seedHistory(): HistoryItem[] {
-  // Pre-populate with the 3 curated samples so the 3-column layout is
-  // populated on first load. Their pre-baked results make selection instant.
-  return SAMPLES.map((sample, i) => ({
-    id: `seed_${sample.id}`,
-    addedAt: Date.now() - (SAMPLES.length - i) * 60_000,
-    source: { kind: "sample", id: sample.id },
-    displayName: sample.title,
-    imageUrl: sample.imageUrl,
-    isDicom: false,
-    cachedResult: sample.bakedResult,
-  }))
-}
+const SESSION_STORAGE_KEY = "muck-session-token"
+const DEFAULT_TOP_K_PROTOS = 3
+const JOB_POLL_INTERVAL_MS = 900
+type BackendApiClient = ReturnType<typeof createBackendApiClient>
 
 export default function Home() {
-  const [history, setHistory] = useState<HistoryItem[]>(() => seedHistory())
-  const [activeId, setActiveId] = useState<string | null>(
-    () => seedHistory()[0]?.id ?? null
-  )
+  const [history, setHistory] = useState<HistoryItem[]>([])
+  const [activeId, setActiveId] = useState<string | null>(null)
   const [status, setStatus] = useState<DemoStatus>("ready")
   const [error, setError] = useState<string | null>(null)
+  const [sessionToken, setSessionToken] = useState<string | null>(null)
+  const [user, setUser] = useState<UserResponse | null>(null)
+  const [authOpen, setAuthOpen] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authSubmitting, setAuthSubmitting] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
 
   const [overlayMode, setOverlayMode] = useState<OverlayMode>("heatmap")
   const [threshold, setThreshold] = useState(0.35)
@@ -72,6 +76,25 @@ export default function Home() {
   const [galleryLabel, setGalleryLabel] = useState<number | null>(null)
 
   const requestId = useRef(0)
+
+  const clearSession = useCallback((openDialog = false) => {
+    localStorage.removeItem(SESSION_STORAGE_KEY)
+    setSessionToken(null)
+    setUser(null)
+    if (openDialog) setAuthOpen(true)
+  }, [])
+
+  const api = useMemo(
+    () =>
+      createBackendApiClient({
+        getToken: () => sessionToken,
+        onUnauthorized: () => {
+          clearSession(true)
+          setError("Your session expired. Please log in again.")
+        },
+      }),
+    [clearSession, sessionToken]
+  )
 
   const activeItem = useMemo(
     () => history.find((h) => h.id === activeId) ?? null,
@@ -87,6 +110,85 @@ export default function Home() {
     : null
   const result = activeItem?.cachedResult ?? null
 
+  useEffect(() => {
+    let cancelled = false
+    const stored = localStorage.getItem(SESSION_STORAGE_KEY)
+    if (!stored) {
+      setAuthLoading(false)
+      return
+    }
+
+    setSessionToken(stored)
+    const restoreApi = createBackendApiClient({
+      getToken: () => stored,
+      onUnauthorized: () => clearSession(false),
+    })
+    restoreApi
+      .me()
+      .then((restoredUser) => {
+        if (!cancelled) setUser(restoredUser)
+      })
+      .catch(() => {
+        if (!cancelled) clearSession(false)
+      })
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [clearSession])
+
+  useEffect(() => {
+    if (!sessionToken || !user) {
+      setHistory([])
+      setActiveId(null)
+      return
+    }
+
+    let cancelled = false
+    const objectUrls: string[] = []
+
+    async function loadHistory() {
+      try {
+        const summaries = await api.listPredictions(50)
+        const details = await Promise.all(
+          summaries.map(async (summary) => ({
+            summary,
+            detail: await api.getPrediction(summary.id),
+          }))
+        )
+        const items = await Promise.all(
+          details.map(async ({ summary, detail }) => {
+            const item = await predictionHistoryItem(api, summary, detail)
+            if (item.revokeImageUrl) objectUrls.push(item.imageUrl)
+            return item
+          })
+        )
+        if (cancelled) {
+          objectUrls.forEach((url) => URL.revokeObjectURL(url))
+          return
+        }
+        setHistory(items)
+        setActiveId((current) =>
+          current && items.some((item) => item.id === current)
+            ? current
+            : items[0]?.id ?? null
+        )
+      } catch (e) {
+        if (!cancelled) setError(messageForError(e))
+      }
+    }
+
+    void loadHistory()
+
+    return () => {
+      cancelled = true
+      objectUrls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [api, sessionToken, user])
+
   const updateItem = useCallback(
     (id: string, patch: Partial<HistoryItem>) => {
       setHistory((prev) =>
@@ -96,47 +198,107 @@ export default function Home() {
     []
   )
 
+  const handleAuthSubmit = useCallback(
+    async (mode: "login" | "register", email: string, password: string) => {
+      setAuthSubmitting(true)
+      setAuthError(null)
+      try {
+        const response =
+          mode === "login"
+            ? await api.login(email, password)
+            : await api.register(email, password)
+        localStorage.setItem(SESSION_STORAGE_KEY, response.session_token)
+        setSessionToken(response.session_token)
+        setUser(response.user)
+        setAuthOpen(false)
+        setError(null)
+      } catch (e) {
+        setAuthError(messageForError(e))
+      } finally {
+        setAuthSubmitting(false)
+      }
+    },
+    [api]
+  )
+
+  const handleLogout = useCallback(async () => {
+    try {
+      if (sessionToken) await api.logout()
+    } catch {
+      // Local session cleanup still wins if the backend is unavailable.
+    } finally {
+      requestId.current++
+      clearSession(false)
+      setHistory([])
+      setActiveId(null)
+      setStatus("idle")
+      setError(null)
+    }
+  }, [api, clearSession, sessionToken])
+
+  const requireSession = useCallback(
+    (message: string) => {
+      if (sessionToken && user) return true
+      setAuthError(null)
+      setAuthOpen(true)
+      setError(message)
+      return false
+    },
+    [sessionToken, user]
+  )
+
   const runInference = useCallback(
     async (item: HistoryItem) => {
+      if (!requireSession("Please log in before submitting a CXR study.")) {
+        return
+      }
       const rid = ++requestId.current
       setStatus("loading")
       setError(null)
       setActiveLabelId(null)
 
       try {
-        if (item.source.kind === "sample") {
-          const sampleId = item.source.id
-          const sample = SAMPLES_BY_ID[sampleId]
-          if (sample) {
-            await new Promise((r) =>
-              setTimeout(r, 480 + ((sampleId.length * 30) % 400))
-            )
-            if (requestId.current !== rid) return
-            updateItem(item.id, { cachedResult: sample.bakedResult })
-            setStatus("ready")
-            return
-          }
+        const file = await fileForHistoryItem(item)
+        let job = await api.createPredictionJob(file, {
+          topKProtos: DEFAULT_TOP_K_PROTOS,
+          includeTiming: true,
+        })
+        updateItem(item.id, jobPatch(job))
+
+        while (job.status === "queued" || job.status === "processing") {
+          await delay(JOB_POLL_INTERVAL_MS)
+          job = await api.getPredictionJob(job.id)
+          updateItem(item.id, jobPatch(job))
         }
 
-        const res = await mockInfer(
-          item.source.kind === "file"
-            ? { kind: "file", file: item.source.file }
-            : { kind: "sample", id: item.source.id, size: 0 }
-        )
-        if (requestId.current !== rid) return
-        updateItem(item.id, { cachedResult: res })
-        setStatus("ready")
+        if (job.status !== "completed" || !job.response) {
+          throw new Error(job.error_message || `Prediction job ${job.status}`)
+        }
+
+        const res = normalizeBackendPredictionResponse(job.response, {
+          fallbackImageId: job.image_id,
+          fallbackFilename: item.displayName,
+        })
+        updateItem(item.id, {
+          cachedResult: res,
+          backendPredictionId: job.prediction_id,
+          backendImageId: job.image_id,
+          jobStatus: job.status,
+          errorMessage: null,
+        })
+        if (requestId.current === rid) setStatus("ready")
       } catch (e) {
+        const message = messageForError(e)
+        updateItem(item.id, {
+          jobStatus: "failed",
+          errorMessage: message,
+        })
         if (requestId.current !== rid) return
         setStatus("error")
-        setError(
-          e instanceof Error
-            ? e.message
-            : "Unexpected error while running inference."
-        )
+        setError(message)
       }
     },
-    [updateItem]
+    [api, requireSession, updateItem]
   )
 
   // When the active item changes, run inference if we don't already have a
@@ -154,8 +316,18 @@ export default function Home() {
       requestId.current++
       return
     }
+    if (activeItem.jobStatus === "failed") {
+      setStatus("error")
+      setError(activeItem.errorMessage ?? "Prediction job failed.")
+      requestId.current++
+      return
+    }
+    if (!sessionToken || !user) {
+      setStatus("idle")
+      return
+    }
     void runInference(activeItem)
-  }, [activeItem?.id])
+  }, [activeItem?.id, runInference, sessionToken, user])
 
   // Track file-backed history items so we can revoke their object URLs when
   // they leave the list (or when the page unmounts).
@@ -164,7 +336,7 @@ export default function Home() {
   useEffect(() => {
     const alive = new Set(history.map((h) => h.id))
     history.forEach((h) => {
-      if (h.source.kind === "file" && !h.isDicom) {
+      if (h.revokeImageUrl) {
         ownedUrls.current.set(h.id, h.imageUrl)
       }
     })
@@ -184,6 +356,12 @@ export default function Home() {
   }, [])
 
   const handleUpload = useCallback((loaded: LoadedImage) => {
+    if (!requireSession("Please log in before uploading a CXR study.")) {
+      if (loaded.source.kind === "file" && !loaded.isDicom) {
+        URL.revokeObjectURL(loaded.imageUrl)
+      }
+      return
+    }
     const id = makeId()
     const item: HistoryItem = {
       id,
@@ -193,12 +371,17 @@ export default function Home() {
       imageUrl: loaded.imageUrl,
       isDicom: loaded.isDicom,
       cachedResult: null,
+      jobStatus: "queued",
+      revokeImageUrl: loaded.source.kind === "file" && !loaded.isDicom,
     }
     setHistory((prev) => [item, ...prev])
     setActiveId(id)
-  }, [])
+  }, [requireSession])
 
   const handleAddSample = useCallback((sample: Sample) => {
+    if (!requireSession("Please log in before submitting a sample study.")) {
+      return
+    }
     const id = makeId()
     const item: HistoryItem = {
       id,
@@ -207,11 +390,12 @@ export default function Home() {
       displayName: sample.title,
       imageUrl: sample.imageUrl,
       isDicom: false,
-      cachedResult: sample.bakedResult,
+      cachedResult: null,
+      jobStatus: "queued",
     }
     setHistory((prev) => [item, ...prev])
     setActiveId(id)
-  }, [])
+  }, [requireSession])
 
   const handleSelect = useCallback((id: string) => {
     setActiveId(id)
@@ -241,7 +425,15 @@ export default function Home() {
 
   return (
     <div className="flex min-h-svh flex-col bg-background">
-      <DemoHeader />
+      <DemoHeader
+        user={user}
+        authLoading={authLoading}
+        onAuthClick={() => {
+          setAuthError(null)
+          setAuthOpen(true)
+        }}
+        onLogout={handleLogout}
+      />
       <main className="flex-1">
         <div className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6">
           {error && (
@@ -342,6 +534,13 @@ export default function Home() {
         open={galleryOpen}
         onOpenChange={setGalleryOpen}
       />
+      <AuthDialog
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        onSubmit={handleAuthSubmit}
+        loading={authSubmitting}
+        error={authError}
+      />
     </div>
   )
 }
@@ -361,4 +560,78 @@ function EmptyViewer() {
       </div>
     </div>
   )
+}
+
+async function predictionHistoryItem(
+  api: BackendApiClient,
+  summary: PredictionSummary,
+  detail: PredictionDetail
+): Promise<HistoryItem> {
+  let imageUrl = "/samples/normal.svg"
+  let revokeImageUrl = false
+  try {
+    const blob = await api.fetchImageBlob(detail.image_id)
+    imageUrl = URL.createObjectURL(blob)
+    revokeImageUrl = true
+  } catch {
+    // A missing preview should not hide the persisted prediction result.
+  }
+
+  return {
+    id: `prediction_${detail.id}`,
+    addedAt: new Date(summary.created_at).getTime(),
+    source: {
+      kind: "remote",
+      imageId: detail.image_id,
+      predictionId: detail.id,
+    },
+    displayName: summary.original_filename,
+    imageUrl,
+    isDicom: /\.(dcm|dicom|dcm30)$/i.test(summary.original_filename),
+    cachedResult: normalizeBackendPredictionResponse(detail.response, {
+      fallbackImageId: detail.image_id,
+      fallbackFilename: summary.original_filename,
+    }),
+    backendImageId: detail.image_id,
+    backendPredictionId: detail.id,
+    jobStatus: "completed",
+    revokeImageUrl,
+  }
+}
+
+async function fileForHistoryItem(item: HistoryItem) {
+  if (item.source.kind === "file") return item.source.file
+  if (item.source.kind === "sample") {
+    const sample = SAMPLES_BY_ID[item.source.id]
+    if (!sample) throw new Error("Sample study not found.")
+    const response = await fetch(sample.imageUrl)
+    if (!response.ok) {
+      throw new Error(`Could not load sample study (${response.status}).`)
+    }
+    const blob = await response.blob()
+    return new File([blob], `${sample.id}.png`, {
+      type: blob.type || "image/png",
+    })
+  }
+  throw new Error("Stored predictions do not need to be submitted again.")
+}
+
+function jobPatch(job: PredictionJob): Partial<HistoryItem> {
+  return {
+    backendJobId: job.id,
+    backendImageId: job.image_id,
+    backendPredictionId: job.prediction_id,
+    jobStatus: job.status,
+    errorMessage: job.error_message,
+  }
+}
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
+}
+
+function messageForError(error: unknown) {
+  if (error instanceof ApiError) return error.message
+  if (error instanceof Error) return error.message
+  return "Unexpected backend error."
 }
