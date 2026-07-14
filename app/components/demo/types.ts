@@ -1,4 +1,4 @@
-import type { InferenceResult } from "~/lib/mock-api"
+import type { InferenceResult } from "~/lib/inference"
 
 export type LoadedImage = {
   source:
@@ -32,8 +32,8 @@ export type DemoState = {
   status: DemoStatus
   error: string | null
   overlayMode: OverlayMode
-  threshold: number
+  displayThreshold: number
   heatmapOpacity: number
-  activeLabelId: number | null
+  activePredictionKey: string | null
   compare: boolean
 }

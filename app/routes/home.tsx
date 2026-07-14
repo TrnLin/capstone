@@ -24,7 +24,7 @@ import {
   type UserResponse,
 } from "~/lib/backend-api"
 import { normalizeBackendPredictionResponse } from "~/lib/backend-adapter"
-import type { InferenceResult } from "~/lib/mock-api"
+import type { InferenceResult } from "~/lib/inference"
 import { SAMPLES, SAMPLES_BY_ID } from "~/lib/samples"
 import type { Sample } from "~/lib/samples"
 import type {
@@ -67,13 +67,17 @@ export default function Home() {
   const [authError, setAuthError] = useState<string | null>(null)
 
   const [overlayMode, setOverlayMode] = useState<OverlayMode>("heatmap")
-  const [threshold, setThreshold] = useState(0.35)
+  const [displayThreshold, setDisplayThreshold] = useState(0.5)
   const [heatmapOpacity, setHeatmapOpacity] = useState(0.65)
-  const [activeLabelId, setActiveLabelId] = useState<number | null>(null)
+  const [activePredictionKey, setActivePredictionKey] = useState<string | null>(
+    null
+  )
   const [compare, setCompare] = useState(false)
 
   const [galleryOpen, setGalleryOpen] = useState(false)
-  const [galleryLabel, setGalleryLabel] = useState<number | null>(null)
+  const [galleryPredictionKey, setGalleryPredictionKey] = useState<
+    string | null
+  >(null)
 
   const requestId = useRef(0)
 
@@ -174,7 +178,7 @@ export default function Home() {
         setActiveId((current) =>
           current && items.some((item) => item.id === current)
             ? current
-            : items[0]?.id ?? null
+            : (items[0]?.id ?? null)
         )
       } catch (e) {
         if (!cancelled) setError(messageForError(e))
@@ -189,14 +193,11 @@ export default function Home() {
     }
   }, [api, sessionToken, user])
 
-  const updateItem = useCallback(
-    (id: string, patch: Partial<HistoryItem>) => {
-      setHistory((prev) =>
-        prev.map((h) => (h.id === id ? { ...h, ...patch } : h))
-      )
-    },
-    []
-  )
+  const updateItem = useCallback((id: string, patch: Partial<HistoryItem>) => {
+    setHistory((prev) =>
+      prev.map((h) => (h.id === id ? { ...h, ...patch } : h))
+    )
+  }, [])
 
   const handleAuthSubmit = useCallback(
     async (mode: "login" | "register", email: string, password: string) => {
@@ -255,7 +256,7 @@ export default function Home() {
       const rid = ++requestId.current
       setStatus("loading")
       setError(null)
-      setActiveLabelId(null)
+      setActivePredictionKey(null)
 
       try {
         const file = await fileForHistoryItem(item)
@@ -278,6 +279,7 @@ export default function Home() {
         const res = normalizeBackendPredictionResponse(job.response, {
           fallbackImageId: job.image_id,
           fallbackFilename: item.displayName,
+          resolveApiUrl: api.apiUrl,
         })
         updateItem(item.id, {
           cachedResult: res,
@@ -309,7 +311,7 @@ export default function Home() {
       setStatus("idle")
       return
     }
-    setActiveLabelId(null)
+    setActivePredictionKey(null)
     setCompare(false)
     if (activeItem.cachedResult) {
       setStatus("ready")
@@ -355,47 +357,53 @@ export default function Home() {
     }
   }, [])
 
-  const handleUpload = useCallback((loaded: LoadedImage) => {
-    if (!requireSession("Please log in before uploading a CXR study.")) {
-      if (loaded.source.kind === "file" && !loaded.isDicom) {
-        URL.revokeObjectURL(loaded.imageUrl)
+  const handleUpload = useCallback(
+    (loaded: LoadedImage) => {
+      if (!requireSession("Please log in before uploading a CXR study.")) {
+        if (loaded.source.kind === "file" && !loaded.isDicom) {
+          URL.revokeObjectURL(loaded.imageUrl)
+        }
+        return
       }
-      return
-    }
-    const id = makeId()
-    const item: HistoryItem = {
-      id,
-      addedAt: Date.now(),
-      source: loaded.source,
-      displayName: loaded.displayName,
-      imageUrl: loaded.imageUrl,
-      isDicom: loaded.isDicom,
-      cachedResult: null,
-      jobStatus: "queued",
-      revokeImageUrl: loaded.source.kind === "file" && !loaded.isDicom,
-    }
-    setHistory((prev) => [item, ...prev])
-    setActiveId(id)
-  }, [requireSession])
+      const id = makeId()
+      const item: HistoryItem = {
+        id,
+        addedAt: Date.now(),
+        source: loaded.source,
+        displayName: loaded.displayName,
+        imageUrl: loaded.imageUrl,
+        isDicom: loaded.isDicom,
+        cachedResult: null,
+        jobStatus: "queued",
+        revokeImageUrl: loaded.source.kind === "file" && !loaded.isDicom,
+      }
+      setHistory((prev) => [item, ...prev])
+      setActiveId(id)
+    },
+    [requireSession]
+  )
 
-  const handleAddSample = useCallback((sample: Sample) => {
-    if (!requireSession("Please log in before submitting a sample study.")) {
-      return
-    }
-    const id = makeId()
-    const item: HistoryItem = {
-      id,
-      addedAt: Date.now(),
-      source: { kind: "sample", id: sample.id },
-      displayName: sample.title,
-      imageUrl: sample.imageUrl,
-      isDicom: false,
-      cachedResult: null,
-      jobStatus: "queued",
-    }
-    setHistory((prev) => [item, ...prev])
-    setActiveId(id)
-  }, [requireSession])
+  const handleAddSample = useCallback(
+    (sample: Sample) => {
+      if (!requireSession("Please log in before submitting a sample study.")) {
+        return
+      }
+      const id = makeId()
+      const item: HistoryItem = {
+        id,
+        addedAt: Date.now(),
+        source: { kind: "sample", id: sample.id },
+        displayName: sample.title,
+        imageUrl: sample.imageUrl,
+        isDicom: false,
+        cachedResult: null,
+        jobStatus: "queued",
+      }
+      setHistory((prev) => [item, ...prev])
+      setActiveId(id)
+    },
+    [requireSession]
+  )
 
   const handleSelect = useCallback((id: string) => {
     setActiveId(id)
@@ -418,10 +426,14 @@ export default function Home() {
     setError(message)
   }, [])
 
-  const handleOpenGallery = useCallback((labelId: number) => {
-    setGalleryLabel(labelId)
+  const handleOpenGallery = useCallback((predictionKey: string) => {
+    setGalleryPredictionKey(predictionKey)
     setGalleryOpen(true)
   }, [])
+
+  useEffect(() => {
+    if (result) setDisplayThreshold(result.modelThreshold)
+  }, [activeItem?.id, result?.modelThreshold])
 
   return (
     <div className="flex min-h-svh flex-col bg-background">
@@ -473,10 +485,10 @@ export default function Home() {
                   result={result}
                   loading={status === "loading"}
                   overlayMode={overlayMode}
-                  threshold={threshold}
+                  displayThreshold={displayThreshold}
                   heatmapOpacity={heatmapOpacity}
-                  activeLabelId={activeLabelId}
-                  onClearActive={() => setActiveLabelId(null)}
+                  activePredictionKey={activePredictionKey}
+                  onClearActive={() => setActivePredictionKey(null)}
                   compare={compare}
                   className="h-full"
                 />
@@ -489,23 +501,24 @@ export default function Home() {
               <ControlsPanel
                 overlayMode={overlayMode}
                 onOverlayModeChange={setOverlayMode}
-                threshold={threshold}
-                onThresholdChange={setThreshold}
+                result={result}
+                displayThreshold={displayThreshold}
+                onDisplayThresholdChange={setDisplayThreshold}
                 heatmapOpacity={heatmapOpacity}
                 onHeatmapOpacityChange={setHeatmapOpacity}
                 compare={compare}
                 onCompareChange={setCompare}
-                activeLabelId={activeLabelId}
-                onClearActive={() => setActiveLabelId(null)}
+                activePredictionKey={activePredictionKey}
+                onClearActive={() => setActivePredictionKey(null)}
                 disabled={!image}
               />
               <div className="rounded-2xl bg-card p-3 ring-1 ring-foreground/10 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 <PredictionList
                   result={result}
                   loading={status === "loading"}
-                  threshold={threshold}
-                  activeLabelId={activeLabelId}
-                  onFocusLabel={setActiveLabelId}
+                  displayThreshold={displayThreshold}
+                  activePredictionKey={activePredictionKey}
+                  onFocusPrediction={setActivePredictionKey}
                   onOpenPrototypeGallery={handleOpenGallery}
                 />
               </div>
@@ -518,19 +531,18 @@ export default function Home() {
 
           <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5 pb-6 text-xs text-muted-foreground">
             <span>
-              Muck · Interpretable Multi-Label CXR Classification via
-              Prototype Learning
+              Muck · Interpretable Multi-Label CXR Classification via Prototype
+              Learning
             </span>
             <span className="tabular-nums">
-              RMIT SSET Capstone · model:{" "}
-              {result?.modelVersion ?? "not loaded"}
+              RMIT SSET Capstone · model: {result?.modelVersion ?? "not loaded"}
             </span>
           </footer>
         </div>
       </main>
       <PrototypeGallery
         result={result}
-        labelId={galleryLabel}
+        predictionKey={galleryPredictionKey}
         open={galleryOpen}
         onOpenChange={setGalleryOpen}
       />
@@ -554,8 +566,8 @@ function EmptyViewer() {
         </p>
         <p className="text-sm text-muted-foreground">
           Upload a CXR from the left panel, or add one of the curated sample
-          studies to see prototype-based predictions, occurrence maps, and
-          bounding boxes.
+          studies to see backend-provided predictions, occurrence maps, and
+          prototype evidence.
         </p>
       </div>
     </div>
@@ -591,6 +603,7 @@ async function predictionHistoryItem(
     cachedResult: normalizeBackendPredictionResponse(detail.response, {
       fallbackImageId: detail.image_id,
       fallbackFilename: summary.original_filename,
+      resolveApiUrl: api.apiUrl,
     }),
     backendImageId: detail.image_id,
     backendPredictionId: detail.id,
