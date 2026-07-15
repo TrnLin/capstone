@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from "react"
-import { SparklesIcon, SplitSquareVerticalIcon, XIcon } from "lucide-react"
+import {
+  BoxIcon,
+  SparklesIcon,
+  SplitSquareVerticalIcon,
+  XIcon,
+} from "lucide-react"
 
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Skeleton } from "~/components/ui/skeleton"
 import { cn } from "~/lib/utils"
-import { LABELS_BY_ID, NO_FINDING_ID } from "~/lib/labels"
-import type { InferenceResult } from "~/lib/mock-api"
+import type { InferenceResult } from "~/lib/inference"
 
-import { BoxOverlay } from "./overlay-boxes"
+import { ExplanationImage } from "./explanation-image"
 import { HeatmapOverlay } from "./overlay-heatmap"
-import { PrototypeThumbnail } from "./prototype-thumbnail"
 import type { LoadedImage, OverlayMode } from "./types"
 
 type ViewerProps = {
@@ -18,9 +21,9 @@ type ViewerProps = {
   result: InferenceResult | null
   loading: boolean
   overlayMode: OverlayMode
-  threshold: number
+  displayThreshold: number
   heatmapOpacity: number
-  activeLabelId: number | null
+  activePredictionKey: string | null
   onClearActive: () => void
   compare: boolean
   className?: string
@@ -31,9 +34,9 @@ export function Viewer({
   result,
   loading,
   overlayMode,
-  threshold,
+  displayThreshold,
   heatmapOpacity,
-  activeLabelId,
+  activePredictionKey,
   onClearActive,
   compare,
   className,
@@ -61,7 +64,7 @@ export function Viewer({
         </Badge>
       )}
 
-      {activeLabelId !== null && (
+      {activePredictionKey !== null && (
         <div className="absolute top-3 right-3 z-10">
           <Button
             size="xs"
@@ -75,11 +78,9 @@ export function Viewer({
         </div>
       )}
 
-      <div
-        className="relative mx-auto flex min-h-0 w-full flex-1 items-center justify-center"
-      >
+      <div className="relative mx-auto flex min-h-0 w-full flex-1 items-center justify-center">
         <div
-          className="relative w-full max-h-full"
+          className="relative max-h-full w-full"
           style={{ aspectRatio: aspect }}
         >
           <img
@@ -95,36 +96,30 @@ export function Viewer({
             draggable={false}
             className={cn(
               "absolute inset-0 h-full w-full object-contain select-none",
+              "outline -outline-offset-1 outline-black/10 dark:outline-white/10",
               "transition-opacity duration-300",
               loading && "opacity-70"
             )}
           />
 
-          {result && (overlayMode === "heatmap" || overlayMode === "boxes") && (
+          {result && overlayMode === "heatmap" && (
             <CompareClip compare={compare}>
-              {overlayMode === "heatmap" && (
-                <HeatmapOverlay
-                  result={result}
-                  threshold={threshold}
-                  opacity={heatmapOpacity}
-                  activeLabelId={activeLabelId}
-                />
-              )}
-              {overlayMode === "boxes" && (
-                <BoxOverlay
-                  result={result}
-                  threshold={threshold}
-                  activeLabelId={activeLabelId}
-                />
-              )}
+              <HeatmapOverlay
+                result={result}
+                displayThreshold={displayThreshold}
+                opacity={heatmapOpacity}
+                activePredictionKey={activePredictionKey}
+              />
             </CompareClip>
           )}
+
+          {result && overlayMode === "boxes" ? <UnavailableBoxes /> : null}
 
           {result && overlayMode === "prototypes" && (
             <PrototypeOverlay
               result={result}
-              threshold={threshold}
-              activeLabelId={activeLabelId}
+              displayThreshold={displayThreshold}
+              activePredictionKey={activePredictionKey}
             />
           )}
 
@@ -226,51 +221,102 @@ function CompareClip({
 
 function PrototypeOverlay({
   result,
-  threshold,
-  activeLabelId,
+  displayThreshold,
+  activePredictionKey,
 }: {
   result: InferenceResult
-  threshold: number
-  activeLabelId: number | null
+  displayThreshold: number
+  activePredictionKey: string | null
 }) {
-  const top = result.predictions.find(
-    (p) => p.labelId !== NO_FINDING_ID && p.probability >= threshold
+  const prototypeKeys = new Set(
+    result.prototypes.map((prototype) => prototype.predictionKey)
   )
-  const focusId = activeLabelId ?? top?.labelId ?? null
-  if (focusId === null) return null
+  const top = result.predictions.reduce<
+    InferenceResult["predictions"][number] | null
+  >((current, prediction) => {
+    if (
+      prediction.probability < displayThreshold ||
+      !prototypeKeys.has(prediction.key)
+    ) {
+      return current
+    }
+    return !current || prediction.probability > current.probability
+      ? prediction
+      : current
+  }, null)
+  const focusKey = activePredictionKey ?? top?.key ?? null
+  const focusedPrediction = result.predictions.find(
+    (prediction) => prediction.key === focusKey
+  )
+  if (focusKey === null) {
+    return (
+      <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
+        <div className="rounded-xl bg-black/70 px-3 py-2.5 text-xs text-white/80 backdrop-blur-sm">
+          No prototype evidence was returned above the display threshold.
+        </div>
+      </div>
+    )
+  }
 
   const protos = result.prototypes
-    .filter((p) => p.labelId === focusId)
+    .filter((prototype) => prototype.predictionKey === focusKey)
     .slice(0, 3)
-  if (protos.length === 0) return null
-
-  const label = LABELS_BY_ID[focusId]
+  if (protos.length === 0) {
+    return (
+      <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
+        <div className="rounded-xl bg-black/70 px-3 py-2.5 text-xs text-white/80 backdrop-blur-sm">
+          No prototype evidence was returned for{" "}
+          {focusedPrediction?.label ?? "this prediction"}.
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="absolute top-4 left-4 flex max-w-[min(60%,360px)] flex-col gap-2">
+    <div className="absolute top-4 left-4 flex max-w-[min(76%,400px)] flex-col gap-2">
       <div className="inline-flex w-fit items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-0.5 text-[11px] font-medium text-white/95 backdrop-blur-sm">
         <SparklesIcon className="size-3" />
-        Nearest prototypes · {label?.shortName ?? "label"}
+        Backend prototypes · {focusedPrediction?.label ?? "prediction"}
       </div>
       <div className="flex items-stretch gap-2">
-        {protos.map((p) => (
+        {protos.map((prototype) => (
           <div
-            key={p.prototypeId}
+            key={prototype.prototypeId}
             className="flex w-28 flex-col gap-1 rounded-xl bg-black/55 p-1.5 ring-1 ring-white/15 backdrop-blur-sm"
           >
             <div className="aspect-square w-full overflow-hidden rounded-lg">
-              <PrototypeThumbnail seed={p.thumbnailSeed} labelId={p.labelId} />
+              <ExplanationImage
+                src={prototype.sourceImageUrl ?? prototype.activationMapUrl}
+                alt={`Prototype evidence ${prototype.prototypeId}`}
+                unavailableText="Source unavailable"
+              />
             </div>
             <div className="flex items-center justify-between px-1 text-[10px] text-white/90">
               <span className="tabular-nums">
-                {Math.round(p.similarity * 100)}%
+                {prototype.similarity === null
+                  ? "—"
+                  : `${(prototype.similarity * 100).toFixed(1)}%`}
               </span>
-              <span className="uppercase tracking-wide text-white/60">
-                {p.sourceDataset}
+              <span className="tracking-wide text-white/60 uppercase">
+                {prototype.sourceImageUrl ? "source" : "activation"}
               </span>
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function UnavailableBoxes() {
+  return (
+    <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
+      <div className="flex max-w-xs items-start gap-2 rounded-xl bg-black/70 px-3 py-2.5 text-xs text-white/85 shadow-lg backdrop-blur-sm">
+        <BoxIcon className="mt-0.5 size-3.5 shrink-0 text-white/60" />
+        <span className="text-pretty">
+          Bounding boxes are unavailable because the backend does not return
+          coordinates.
+        </span>
       </div>
     </div>
   )

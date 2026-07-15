@@ -101,14 +101,20 @@ function makeId() {
   return `it_${Math.random().toString(36).slice(2, 9)}`
 }
 
-function seedItems(): LegacyItem[] {
+// Fixed reference time so the initial (server + first client) render is
+// deterministic. Real "recent" timestamps are filled in on mount, client-side
+// only, to avoid a server/client hydration mismatch.
+const SEED_BASE_TIME = 1_735_689_600_000 // 2025-01-01T00:00:00Z
+const VISITOR_PLACEHOLDER = "0000000"
+
+function seedItems(baseTime: number): LegacyItem[] {
   return SAMPLES.map((s, i) => ({
     id: `seed_${s.id}`,
     title: s.title,
     source: { kind: "sample", id: s.id },
     imageUrl: s.imageUrl,
     isDicom: false,
-    addedAt: Date.now() - (SAMPLES.length - i) * 60_000,
+    addedAt: baseTime - (SAMPLES.length - i) * 60_000,
     cachedResult: s.bakedResult,
   }))
 }
@@ -138,17 +144,17 @@ function fmtTime(t: number) {
 }
 
 export default function Legacy() {
-  const [items, setItems] = useState<LegacyItem[]>(() => seedItems())
+  const [items, setItems] = useState<LegacyItem[]>(() =>
+    seedItems(SEED_BASE_TIME)
+  )
   const [activeId, setActiveId] = useState<string | null>(
-    () => seedItems()[0]?.id ?? null
+    () => seedItems(SEED_BASE_TIME)[0]?.id ?? null
   )
   const [busy, setBusy] = useState(false)
   const [overlay, setOverlay] = useState<OverlayMode>("heatmap")
   const [threshold, setThreshold] = useState(0.35)
   const [showRaw, setShowRaw] = useState(false)
-  const [visitor] = useState(() =>
-    String(1337 + Math.floor(Math.random() * 9999)).padStart(7, "0")
-  )
+  const [visitor, setVisitor] = useState(VISITOR_PLACEHOLDER)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const reqId = useRef(0)
@@ -159,6 +165,21 @@ export default function Legacy() {
     [items, activeId]
   )
   const result = active?.cachedResult ?? null
+
+  // Client-only: swap in the randomised visitor count and rebase the seeded
+  // sample timestamps to "now". Kept out of the initial render so the server
+  // and first client render stay identical (no hydration mismatch).
+  useEffect(() => {
+    setVisitor(String(1337 + Math.floor(Math.random() * 9999)).padStart(7, "0"))
+    const now = Date.now()
+    setItems((prev) =>
+      prev.map((it, i) =>
+        it.id.startsWith("seed_")
+          ? { ...it, addedAt: now - (prev.length - i) * 60_000 }
+          : it
+      )
+    )
+  }, [])
 
   const updateItem = useCallback(
     (id: string, patch: Partial<LegacyItem>) => {

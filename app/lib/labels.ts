@@ -68,7 +68,7 @@ export const LABELS: readonly Label[] = [
     id: 2,
     name: "Calcification",
     shortName: "Calcification",
-    color: "oklch(0.82 0.05 240)",
+    color: "oklch(0.82 0.11 235)",
     clinicalNote:
       "Focal calcium deposits, usually post-infectious (granulomatous) or vascular. High-attenuation foci stand out against surrounding parenchyma.",
     candidateBlobs: [
@@ -157,7 +157,7 @@ export const LABELS: readonly Label[] = [
     id: 9,
     name: "Other lesion",
     shortName: "Other lesion",
-    color: "oklch(0.7 0.03 280)",
+    color: "oklch(0.76 0.1 280)",
     clinicalNote:
       "Abnormality present that does not fit the other defined categories. Flagged for radiologist review.",
     candidateBlobs: [

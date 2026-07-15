@@ -1,72 +1,89 @@
-import { LABELS_BY_ID } from "~/lib/labels"
-import type { InferenceResult } from "~/lib/mock-api"
+import { useEffect, useState } from "react"
+import { AlertTriangleIcon, ImageOffIcon, LoaderCircleIcon } from "lucide-react"
+
+import { selectOccurrenceMap } from "~/lib/explainability"
+import type { InferenceResult } from "~/lib/inference"
 
 type HeatmapOverlayProps = {
   result: InferenceResult
-  threshold: number
+  displayThreshold: number
   opacity: number
-  activeLabelId: number | null
+  activePredictionKey: string | null
 }
 
 export function HeatmapOverlay({
   result,
-  threshold,
+  displayThreshold,
   opacity,
-  activeLabelId,
+  activePredictionKey,
 }: HeatmapOverlayProps) {
-  const entries = Object.entries(result.occurrenceMaps)
-    .map(([id, blobs]) => ({ id: Number(id), blobs }))
-    .filter(({ id }) => {
-      const pred = result.predictions.find((p) => p.labelId === id)
-      return pred && pred.probability >= threshold
-    })
-  const filtered =
-    activeLabelId !== null
-      ? entries.filter((e) => e.id === activeLabelId)
-      : entries
+  const selection = selectOccurrenceMap(
+    result,
+    displayThreshold,
+    activePredictionKey
+  )
+  const [imageState, setImageState] = useState<"loading" | "ready" | "error">(
+    selection.imageUrl ? "loading" : "ready"
+  )
+
+  useEffect(() => {
+    setImageState(selection.imageUrl ? "loading" : "ready")
+  }, [selection.imageUrl])
+
+  if (selection.status !== "available" || !selection.imageUrl) {
+    const belowThreshold = selection.status === "below-threshold"
+    return (
+      <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
+        <div className="flex max-w-xs items-start gap-2 rounded-xl bg-black/70 px-3 py-2.5 text-xs text-white/85 shadow-lg backdrop-blur-sm">
+          {belowThreshold ? (
+            <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0 text-amber-300" />
+          ) : (
+            <ImageOffIcon className="mt-0.5 size-3.5 shrink-0 text-white/60" />
+          )}
+          <span className="text-pretty">
+            {belowThreshold
+              ? `${selection.label ?? "This prediction"} is below the display threshold.`
+              : selection.label
+                ? `No occurrence map was returned for ${selection.label}.`
+                : "No occurrence maps were returned by the backend."}
+          </span>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <svg
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      className="pointer-events-none absolute inset-0 h-full w-full"
-      style={{ mixBlendMode: "screen", opacity }}
-      aria-hidden="true"
-    >
-      <defs>
-        {filtered.map(({ id, blobs }) => {
-          const color = LABELS_BY_ID[id]?.color ?? "oklch(0.8 0.15 200)"
-          return blobs.map((blob, i) => (
-            <radialGradient
-              id={`blob-${id}-${i}`}
-              key={`grad-${id}-${i}`}
-              cx="50%"
-              cy="50%"
-              r="50%"
-            >
-              <stop offset="0%" stopColor={color} stopOpacity={blob.intensity} />
-              <stop
-                offset="55%"
-                stopColor={color}
-                stopOpacity={blob.intensity * 0.45}
-              />
-              <stop offset="100%" stopColor={color} stopOpacity="0" />
-            </radialGradient>
-          ))
-        })}
-      </defs>
-      {filtered.map(({ id, blobs }) =>
-        blobs.map((blob, i) => (
-          <ellipse
-            key={`ellipse-${id}-${i}`}
-            cx={blob.cx * 100}
-            cy={blob.cy * 100}
-            rx={blob.rx * 100 * 1.6}
-            ry={blob.ry * 100 * 1.6}
-            fill={`url(#blob-${id}-${i})`}
-          />
-        ))
-      )}
-    </svg>
+    <div className="pointer-events-none absolute inset-0">
+      <img
+        src={selection.imageUrl}
+        alt=""
+        onLoad={() => setImageState("ready")}
+        onError={() => setImageState("error")}
+        className="absolute inset-0 size-full object-fill transition-opacity duration-200 ease-out"
+        style={{ opacity: imageState === "ready" ? opacity : 0 }}
+        aria-hidden="true"
+      />
+      {imageState === "loading" ? (
+        <div className="absolute inset-0 grid place-items-center">
+          <span className="flex items-center gap-2 rounded-full bg-black/65 px-3 py-1.5 text-[11px] text-white/85 backdrop-blur-sm">
+            <LoaderCircleIcon className="size-3.5 animate-spin" />
+            Loading occurrence map…
+          </span>
+        </div>
+      ) : null}
+      {imageState === "error" ? (
+        <div className="absolute inset-0 grid place-items-center p-6">
+          <span className="flex max-w-xs items-center gap-2 rounded-xl bg-black/70 px-3 py-2 text-xs text-white/85 backdrop-blur-sm">
+            <ImageOffIcon className="size-3.5 shrink-0" />
+            The occurrence-map image could not be displayed.
+          </span>
+        </div>
+      ) : null}
+      {imageState === "ready" ? (
+        <span className="absolute bottom-3 left-3 rounded-md bg-black/65 px-2 py-1 text-[11px] font-medium text-white/90 shadow-sm backdrop-blur-sm">
+          Occurrence map · {selection.label}
+        </span>
+      ) : null}
+    </div>
   )
 }

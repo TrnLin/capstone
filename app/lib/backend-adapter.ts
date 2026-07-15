@@ -1,10 +1,9 @@
-import {
-  LABELS,
-  LABELS_BY_ID,
-  NO_FINDING_ID,
-  type AnatomicalBlob,
-} from "./labels"
-import { hash32, type InferenceResult, type Prediction } from "./mock-api"
+import { LABELS_BY_ID } from "./labels"
+import type {
+  InferencePrediction,
+  InferenceResult,
+  PrototypeMatch,
+} from "./inference"
 import type {
   BackendModelPrediction,
   BackendPredictionResponse,
@@ -14,10 +13,7 @@ import type {
 type NormalizeOptions = {
   fallbackImageId?: string
   fallbackFilename?: string
-}
-
-type OccurrenceBlob = AnatomicalBlob & {
-  intensity: number
+  resolveApiUrl?: (path: string) => string
 }
 
 const CLASS_TO_LABEL_ID = new Map<string, number>(
@@ -54,35 +50,52 @@ export function normalizeBackendPredictionResponse(
   payload: BackendPredictionResponse,
   opts: NormalizeOptions = {}
 ): InferenceResult {
-  const byId = new Map<number, BackendModelPrediction>()
-  for (const prediction of payload.predictions ?? []) {
-    const labelId = labelIdForPrediction(prediction)
-    if (labelId === null) continue
-    const current = byId.get(labelId)
-    if (!current || probabilityOf(prediction) > probabilityOf(current)) {
-      byId.set(labelId, prediction)
+  const rawThreshold = finiteNumber(payload.threshold)
+  const threshold = rawThreshold === null ? 0.5 : clamp01(rawThreshold)
+  const warnings: string[] = []
+  const predictions = (payload.predictions ?? []).flatMap<InferencePrediction>(
+    (prediction) => {
+      const className = prediction.class_name ?? prediction.label
+      const probability = finiteNumber(prediction.probability)
+      if (!className || probability === null) {
+        warnings.push(
+          "Skipped a prediction without a class name or finite probability."
+        )
+        return []
+      }
+      const labelId = labelIdForPrediction(prediction)
+      return [
+        {
+          key: predictionKey(className),
+          labelId,
+          label:
+            labelId === null
+              ? className
+              : (LABELS_BY_ID[labelId]?.name ?? className),
+          probability: round(clamp01(probability), 3),
+          predicted:
+            typeof prediction.predicted === "boolean"
+              ? prediction.predicted
+              : null,
+          thresholdMargin: finiteNumber(prediction.threshold_margin),
+          thresholdBorderline:
+            typeof prediction.threshold_borderline === "boolean"
+              ? prediction.threshold_borderline
+              : null,
+          reasoning:
+            typeof prediction.reasoning === "string" &&
+            prediction.reasoning.trim()
+              ? prediction.reasoning.trim()
+              : null,
+          occurrenceMapUrl: explanationImageUrl(
+            prediction.occurrence_map_base64,
+            warnings,
+            `${className} occurrence map`
+          ),
+        },
+      ]
     }
-  }
-
-  const threshold = typeof payload.threshold === "number" ? payload.threshold : 0.5
-  const predictions = LABELS.map<Prediction>((label) => {
-    const backendPrediction = byId.get(label.id)
-    const probability = round(probabilityOf(backendPrediction), 3)
-    const prediction: Prediction = {
-      labelId: label.id,
-      label: label.name,
-      probability,
-    }
-    if (
-      label.id !== NO_FINDING_ID &&
-      label.hasBbox &&
-      probability >= threshold &&
-      label.candidateBlobs[0]
-    ) {
-      prediction.bbox = bboxFromBlob(label.candidateBlobs[0])
-    }
-    return prediction
-  }).sort((a, b) => b.probability - a.probability)
+  )
 
   return {
     imageId:
@@ -91,9 +104,10 @@ export function normalizeBackendPredictionResponse(
       payload.filename ??
       opts.fallbackFilename ??
       "backend-image",
+    filename: typeof payload.filename === "string" ? payload.filename : null,
     predictions,
-    occurrenceMaps: buildOccurrenceMaps(predictions, threshold),
-    prototypes: buildPrototypes(payload.predictions ?? []),
+    prototypes: buildPrototypes(payload.predictions ?? [], opts, warnings),
+    modelThreshold: threshold,
     modelVersion: modelVersion(payload),
     inferenceMs: Math.round(
       payload.backend?.duration_ms ??
@@ -101,6 +115,15 @@ export function normalizeBackendPredictionResponse(
         payload.timings_ms?.response_assembly ??
         0
     ),
+    timingsMs: numericTimingEntries(payload.timings_ms),
+    explanationSource: "backend",
+    backend: {
+      imageId: stringOrNull(payload.backend?.image_id),
+      predictionId: stringOrNull(payload.backend?.prediction_id),
+      durationMs: finiteNumber(payload.backend?.duration_ms),
+    },
+    sanitizedResponse: sanitizeBackendResponse(payload),
+    normalizationWarnings: warnings,
   }
 }
 
@@ -119,54 +142,37 @@ function normalizeClassName(name: string) {
     .replace(/\s+/g, " ")
 }
 
-function probabilityOf(prediction: BackendModelPrediction | undefined) {
-  const probability = prediction?.probability
-  return typeof probability === "number" && Number.isFinite(probability)
-    ? Math.max(0, Math.min(1, probability))
-    : 0.02
-}
-
-function bboxFromBlob(blob: AnatomicalBlob): [number, number, number, number] {
-  const pad = 0.02
-  return [
-    round(Math.max(0, blob.cx - blob.rx - pad), 3),
-    round(Math.max(0, blob.cy - blob.ry - pad), 3),
-    round(Math.min(1, blob.rx * 2 + pad * 2), 3),
-    round(Math.min(1, blob.ry * 2 + pad * 2), 3),
-  ]
-}
-
-function buildOccurrenceMaps(
-  predictions: Prediction[],
-  threshold: number
-): Record<number, OccurrenceBlob[]> {
-  const out: Record<number, OccurrenceBlob[]> = {}
+function buildPrototypes(
+  predictions: BackendModelPrediction[],
+  opts: NormalizeOptions,
+  warnings: string[]
+): PrototypeMatch[] {
+  const out: PrototypeMatch[] = []
   for (const prediction of predictions) {
-    if (prediction.labelId === NO_FINDING_ID) continue
-    if (prediction.probability < Math.min(0.35, threshold)) continue
-    const label = LABELS_BY_ID[prediction.labelId]
-    if (!label || label.candidateBlobs.length === 0) continue
-    out[prediction.labelId] = label.candidateBlobs.map((blob, idx) => ({
-      ...blob,
-      intensity: round(Math.min(0.95, 0.55 + prediction.probability * 0.35 - idx * 0.06), 3),
-    }))
-  }
-  return out
-}
-
-function buildPrototypes(predictions: BackendModelPrediction[]): InferenceResult["prototypes"] {
-  const out: InferenceResult["prototypes"] = []
-  for (const prediction of predictions) {
+    const className = prediction.class_name ?? prediction.label
+    if (!className) continue
     const labelId = labelIdForPrediction(prediction)
-    if (labelId === null || labelId === NO_FINDING_ID) continue
     for (const [rank, prototype] of (prediction.prototypes ?? []).entries()) {
       out.push({
+        predictionKey: predictionKey(className),
         labelId,
         prototypeId: prototypeId(labelId, rank, prototype),
-        similarity: round(similarityOf(prototype), 3),
-        sourceDataset: "Backend",
-        thumbnailSeed: hash32(
-          `${labelId}:${rank}:${prototype.prototype_idx ?? ""}:${prototype.source_image_path ?? ""}`
+        similarity: similarityOf(prototype),
+        sourceDistance: finiteNumber(prototype.source_distance),
+        sourceImageUrl: resolveSourceImageUrl(
+          prototype.source_image_url,
+          opts,
+          warnings,
+          `${className} prototype source image`
+        ),
+        sourceImageId: stringOrNull(prototype.source_image_id),
+        sourceFilename: sourceFilename(prototype.source_image_path),
+        patchHeight: finiteNumber(prototype.source_patch_h),
+        patchWidth: finiteNumber(prototype.source_patch_w),
+        activationMapUrl: explanationImageUrl(
+          prototype.heatmap_base64,
+          warnings,
+          `${className} prototype activation`
         ),
       })
     }
@@ -174,16 +180,26 @@ function buildPrototypes(predictions: BackendModelPrediction[]): InferenceResult
   return out
 }
 
-function prototypeId(labelId: number, rank: number, prototype: BackendPrototype) {
-  if (prototype.prototype_idx !== undefined && prototype.prototype_idx !== null) {
+function prototypeId(
+  labelId: number | null,
+  rank: number,
+  prototype: BackendPrototype
+) {
+  if (
+    prototype.prototype_idx !== undefined &&
+    prototype.prototype_idx !== null
+  ) {
     return `proto-${prototype.prototype_idx}`
   }
   if (prototype.source_image_id) return `proto-${prototype.source_image_id}`
   return `proto-${labelId}-${rank + 1}`
 }
 
-function similarityOf(prototype: BackendPrototype) {
-  if (typeof prototype.similarity === "number" && Number.isFinite(prototype.similarity)) {
+function similarityOf(prototype: BackendPrototype): number | null {
+  if (
+    typeof prototype.similarity === "number" &&
+    Number.isFinite(prototype.similarity)
+  ) {
     return Math.max(0, Math.min(1, prototype.similarity))
   }
   if (
@@ -192,7 +208,116 @@ function similarityOf(prototype: BackendPrototype) {
   ) {
     return Math.max(0, Math.min(1, 1 - prototype.source_distance))
   }
-  return 0
+  return null
+}
+
+function predictionKey(name: string) {
+  return normalizeClassName(name).replace(/[\s/]+/g, "-") || "prediction"
+}
+
+function finiteNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value))
+}
+
+function stringOrNull(value: unknown) {
+  return typeof value === "string" && value ? value : null
+}
+
+function rasterDataUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const dataUrlMatch = trimmed.match(
+    /^data:image\/(png|jpe?g|webp);base64,(.+)$/i
+  )
+  if (dataUrlMatch) {
+    return isBase64Payload(dataUrlMatch[2]) ? trimmed : null
+  }
+  if (trimmed.startsWith("data:")) return null
+  const compact = trimmed.replace(/\s+/g, "")
+  if (!isBase64Payload(compact)) return null
+  const mime = compact.startsWith("/9j/")
+    ? "image/jpeg"
+    : compact.startsWith("UklGR")
+      ? "image/webp"
+      : "image/png"
+  return `data:${mime};base64,${compact}`
+}
+
+function isBase64Payload(value: string) {
+  const compact = value.replace(/\s+/g, "")
+  return /^[a-z0-9+/]+={0,2}$/i.test(compact) && compact.length % 4 !== 1
+}
+
+function explanationImageUrl(
+  value: unknown,
+  warnings: string[],
+  description: string
+) {
+  const imageUrl = rasterDataUrl(value)
+  if (value !== null && value !== undefined && value !== "" && !imageUrl) {
+    warnings.push(`Ignored an invalid ${description}.`)
+  }
+  return imageUrl
+}
+
+function resolveSourceImageUrl(
+  value: unknown,
+  opts: NormalizeOptions,
+  warnings: string[],
+  description: string
+) {
+  if (typeof value !== "string" || !value.trim()) return null
+  const url = value.trim()
+  if (/^https?:/i.test(url)) return url
+  if (url.startsWith("data:")) {
+    const imageUrl = rasterDataUrl(url)
+    if (!imageUrl) warnings.push(`Ignored an invalid ${description}.`)
+    return imageUrl
+  }
+  const resolved = opts.resolveApiUrl?.(url) ?? null
+  if (!resolved) warnings.push(`Could not resolve the ${description} URL.`)
+  return resolved
+}
+
+function sourceFilename(value: unknown) {
+  if (typeof value !== "string" || !value) return null
+  return value.split(/[\\/]/).pop() || null
+}
+
+function numericTimingEntries(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object") return {}
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, number] =>
+        typeof entry[1] === "number" && Number.isFinite(entry[1])
+    )
+  )
+}
+
+function sanitizeBackendResponse(value: unknown, key?: string): unknown {
+  if (
+    typeof value === "string" &&
+    (key === "occurrence_map_base64" || key === "heatmap_base64")
+  ) {
+    return `[base64 image omitted: ${value.length} chars]`
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeBackendResponse(item))
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([entryKey, entryValue]) => [
+        entryKey,
+        sanitizeBackendResponse(entryValue, entryKey),
+      ])
+    )
+  }
+  return value
 }
 
 function modelVersion(payload: BackendPredictionResponse) {

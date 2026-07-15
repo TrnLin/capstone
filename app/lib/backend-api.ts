@@ -29,7 +29,13 @@ export type PredictionDetail = {
 
 export type PredictionJob = {
   id: string
-  status: "queued" | "processing" | "completed" | "failed" | "cancelled" | string
+  status:
+    | "queued"
+    | "processing"
+    | "completed"
+    | "failed"
+    | "cancelled"
+    | string
   image_id: string
   prediction_id: string | null
   original_filename?: string | null
@@ -68,6 +74,7 @@ export type BackendModelPrediction = {
 
 export type BackendPredictionResponse = {
   filename?: string
+  model_version?: string
   threshold?: number
   predictions?: BackendModelPrediction[]
   timings_ms?: Record<string, number>
@@ -92,8 +99,10 @@ type RequestOptions = Omit<RequestInit, "headers"> & {
 }
 
 const DEFAULT_API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ||
-  "http://127.0.0.1:8080"
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
+    /\/$/,
+    ""
+  ) || "http://127.0.0.1:8080"
 
 export class ApiError extends Error {
   status: number
@@ -119,7 +128,10 @@ export function createBackendApiClient({
 }: ApiClientOptions = {}) {
   const root = baseUrl.replace(/\/$/, "")
 
-  async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  async function request<T>(
+    path: string,
+    options: RequestOptions = {}
+  ): Promise<T> {
     const headers: Record<string, string> = { ...(options.headers ?? {}) }
     const token = getToken()
     if (options.auth !== false && token) {
@@ -133,7 +145,11 @@ export function createBackendApiClient({
     if (!response.ok) {
       const payload = await readPayload(response)
       if (response.status === 401) onUnauthorized?.()
-      throw new ApiError(errorMessage(payload, response.statusText), response.status, payload)
+      throw new ApiError(
+        errorMessage(payload, response.statusText),
+        response.status,
+        payload
+      )
     }
     return readPayload(response) as Promise<T>
   }
@@ -153,10 +169,18 @@ export function createBackendApiClient({
       return `${root}${path.startsWith("/") ? path : `/${path}`}`
     },
     register(email: string, password: string) {
-      return jsonRequest<AuthResponse>("/api/auth/register", { email, password }, false)
+      return jsonRequest<AuthResponse>(
+        "/api/auth/register",
+        { email, password },
+        false
+      )
     },
     login(email: string, password: string) {
-      return jsonRequest<AuthResponse>("/api/auth/login", { email, password }, false)
+      return jsonRequest<AuthResponse>(
+        "/api/auth/login",
+        { email, password },
+        false
+      )
     },
     logout() {
       return request<{ status: string }>("/api/auth/logout", { method: "POST" })
@@ -164,7 +188,10 @@ export function createBackendApiClient({
     me() {
       return request<UserResponse>("/api/me")
     },
-    createPredictionJob(file: File, opts: { topKProtos?: number; includeTiming?: boolean } = {}) {
+    createPredictionJob(
+      file: File,
+      opts: { topKProtos?: number; includeTiming?: boolean } = {}
+    ) {
       const form = new FormData()
       form.append("file", file)
       form.append("top_k_protos", String(opts.topKProtos ?? 3))
@@ -175,7 +202,9 @@ export function createBackendApiClient({
       })
     },
     getPredictionJob(jobId: string) {
-      return request<PredictionJob>(`/api/prediction-jobs/${encodeURIComponent(jobId)}`)
+      return request<PredictionJob>(
+        `/api/prediction-jobs/${encodeURIComponent(jobId)}`
+      )
     },
     listPredictionJobs(limit = 50) {
       return request<PredictionJob[]>(`/api/prediction-jobs?limit=${limit}`)
@@ -184,19 +213,28 @@ export function createBackendApiClient({
       return request<PredictionSummary[]>(`/api/predictions?limit=${limit}`)
     },
     getPrediction(predictionId: string) {
-      return request<PredictionDetail>(`/api/predictions/${encodeURIComponent(predictionId)}`)
+      return request<PredictionDetail>(
+        `/api/predictions/${encodeURIComponent(predictionId)}`
+      )
     },
     async fetchImageBlob(imageId: string) {
       const token = getToken()
       const headers: Record<string, string> = {}
       if (token) headers.Authorization = `Bearer ${token}`
-      const response = await fetchImpl(`${root}/api/images/${encodeURIComponent(imageId)}`, {
-        headers,
-      })
+      const response = await fetchImpl(
+        `${root}/api/images/${encodeURIComponent(imageId)}`,
+        {
+          headers,
+        }
+      )
       if (!response.ok) {
         const payload = await readPayload(response)
         if (response.status === 401) onUnauthorized?.()
-        throw new ApiError(errorMessage(payload, response.statusText), response.status, payload)
+        throw new ApiError(
+          errorMessage(payload, response.statusText),
+          response.status,
+          payload
+        )
       }
       return response.blob()
     },
