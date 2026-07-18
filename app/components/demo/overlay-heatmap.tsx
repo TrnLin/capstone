@@ -45,7 +45,7 @@ export function HeatmapOverlay({
               ? `${selection.label ?? "This prediction"} is below the display threshold.`
               : selection.label
                 ? `No occurrence map was returned for ${selection.label}.`
-                : "No pathology occurrence map is available above the display threshold."}
+                : "No occurrence maps were returned by the backend."}
           </span>
         </div>
       </div>
@@ -59,7 +59,7 @@ export function HeatmapOverlay({
         alt=""
         onLoad={() => setImageState("ready")}
         onError={() => setImageState("error")}
-        className="absolute inset-0 size-full object-contain transition-opacity duration-200 ease-out"
+        className="absolute inset-0 size-full object-fill transition-opacity duration-200 ease-out"
         style={{ opacity: imageState === "ready" ? opacity : 0 }}
         aria-hidden="true"
       />
@@ -80,26 +80,9 @@ export function HeatmapOverlay({
         </div>
       ) : null}
       {imageState === "ready" ? (
-        <>
-          <span className="absolute bottom-3 left-3 rounded-md bg-black/70 px-2 py-1 text-[11px] font-medium text-white/90 shadow-sm backdrop-blur-sm">
-            Occurrence map · {selection.label}
-          </span>
-          <div
-            className="absolute right-3 bottom-3 flex items-center gap-1.5 rounded-md bg-black/70 px-2 py-1 text-[10px] text-white/75 shadow-sm backdrop-blur-sm"
-            aria-label="Activation intensity from low to high"
-          >
-            <span>Low</span>
-            <span
-              className="h-1.5 w-16 rounded-full"
-              style={{
-                background:
-                  "linear-gradient(90deg, #150b36 0%, #6a176e 35%, #d44842 68%, #f7d13d 100%)",
-              }}
-              aria-hidden="true"
-            />
-            <span>High</span>
-          </div>
-        </>
+        <span className="absolute bottom-3 left-3 rounded-md bg-black/65 px-2 py-1 text-[11px] font-medium text-white/90 shadow-sm backdrop-blur-sm">
+          Occurrence map · {selection.label}
+        </span>
       ) : null}
     </div>
   )

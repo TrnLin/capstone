@@ -99,12 +99,12 @@ export function HistoryPanel({
     <aside
       className={cn(
         "flex flex-col gap-3 rounded-2xl bg-card p-3 ring-1 ring-foreground/10",
-        "xl:h-full xl:min-h-0",
+        "lg:h-full lg:min-h-0",
         className
       )}
       aria-label="Upload history"
     >
-      <header className="flex flex-col gap-2">
+      <header className="flex flex-col gap-2 lg:block lg:space-y-2">
         <div className="flex items-center gap-2 px-1">
           <ClockIcon className="size-3.5 text-muted-foreground" />
           <h2 className="font-heading text-sm font-semibold tracking-tight">
@@ -154,19 +154,19 @@ export function HistoryPanel({
             <UploadIcon />
             Upload CXR
           </Button>
-          <p className="hidden px-3 pt-1 pb-2 text-center text-[10px] text-muted-foreground xl:block">
+          <p className="hidden px-3 pt-1 pb-2 text-center text-[10px] text-muted-foreground lg:block">
             drag & drop · PNG, JPG, DICOM
           </p>
         </div>
       </header>
 
       {availableSamples.length > 0 && (
-        <section className="flex flex-col gap-1.5">
+        <section className="space-y-1.5">
           <div className="flex items-center gap-1.5 px-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
             <SparklesIcon className="size-3" />
             Try a sample
           </div>
-          <div className="flex flex-row gap-1 overflow-x-auto xl:flex-col">
+          <div className="flex flex-row gap-1 overflow-x-auto lg:flex-col">
             {availableSamples.map((sample) => (
               <button
                 key={sample.id}
@@ -189,15 +189,15 @@ export function HistoryPanel({
       <ol
         className={cn(
           "-mx-1 flex min-h-0 gap-1.5 px-1",
-          // Horizontal strip until the full three-column workspace is active.
+          // Horizontal strip on small screens, vertical list on lg+
           "flex-row overflow-x-auto pb-1",
-          "xl:flex-1 xl:flex-col xl:overflow-x-visible xl:overflow-y-auto xl:pb-0"
+          "lg:flex-1 lg:flex-col lg:overflow-x-visible lg:overflow-y-auto lg:pb-0"
         )}
       >
         {items.length === 0 ? (
           <li className="grid w-full place-items-center rounded-xl border border-dashed border-border bg-background/30 px-3 py-8 text-center text-xs text-muted-foreground">
             Upload a CXR or pick a sample
-            <br className="hidden xl:inline" />
+            <br className="hidden lg:inline" />
             {" "}to get started.
           </li>
         ) : (
@@ -245,7 +245,7 @@ function HistoryRow({
       className={cn(
         "group/row relative flex shrink-0 items-center gap-2.5 rounded-xl border bg-background/40 p-1.5 transition-colors",
         // Width constraints per layout
-        "w-[220px] xl:w-auto",
+        "w-[220px] lg:w-auto",
         active
           ? "border-foreground/40 bg-background shadow-[inset_2px_0_0_var(--foreground)]"
           : "border-transparent hover:border-border hover:bg-background/70"

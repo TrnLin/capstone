@@ -55,11 +55,8 @@ export type BackendPrototype = {
   source_image_path?: string | null
   source_image_id?: string | null
   source_image_url?: string | null
-  source_patch_url?: string | null
   source_patch_h?: number | null
   source_patch_w?: number | null
-  source_grid_h?: number | null
-  source_grid_w?: number | null
   source_distance?: number | null
 }
 
@@ -197,7 +194,7 @@ export function createBackendApiClient({
     ) {
       const form = new FormData()
       form.append("file", file)
-      form.append("top_k_protos", String(opts.topKProtos ?? 0))
+      form.append("top_k_protos", String(opts.topKProtos ?? 3))
       form.append("include_timing", String(opts.includeTiming ?? false))
       return request<PredictionJob>("/api/prediction-jobs", {
         method: "POST",

@@ -165,18 +165,10 @@ function buildPrototypes(
           warnings,
           `${className} prototype source image`
         ),
-        sourcePatchUrl: resolveSourceImageUrl(
-          prototype.source_patch_url,
-          opts,
-          warnings,
-          `${className} prototype source patch`
-        ),
         sourceImageId: stringOrNull(prototype.source_image_id),
         sourceFilename: sourceFilename(prototype.source_image_path),
         patchHeight: finiteNumber(prototype.source_patch_h),
         patchWidth: finiteNumber(prototype.source_patch_w),
-        sourceGridHeight: finiteNumber(prototype.source_grid_h),
-        sourceGridWidth: finiteNumber(prototype.source_grid_w),
         activationMapUrl: explanationImageUrl(
           prototype.heatmap_base64,
           warnings,

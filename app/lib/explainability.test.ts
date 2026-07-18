@@ -2,11 +2,9 @@ import { describe, expect, it } from "vitest"
 
 import {
   getExplanationAvailability,
-  getInitialDisplayThreshold,
   selectOccurrenceMap,
 } from "./explainability"
 import type { InferenceResult } from "./inference"
-import { NO_FINDING_ID } from "./labels"
 
 const result: InferenceResult = {
   imageId: "image-1",
@@ -70,32 +68,6 @@ describe("selectOccurrenceMap", () => {
     })
   })
 
-  it("does not use No Finding as a default spatial explanation", () => {
-    const withNoFinding: InferenceResult = {
-      ...result,
-      predictions: [
-        ...result.predictions,
-        {
-          key: "no-finding",
-          labelId: NO_FINDING_ID,
-          label: "No Finding",
-          probability: 0.99,
-          predicted: true,
-          thresholdMargin: 0.49,
-          thresholdBorderline: false,
-          reasoning: null,
-          occurrenceMapUrl: "data:image/png;base64,NOFINDING",
-        },
-      ],
-    }
-
-    expect(selectOccurrenceMap(withNoFinding, 0.7, null)).toMatchObject({
-      status: "available",
-      predictionKey: "highest-explained",
-      imageUrl: "data:image/png;base64,AAAA",
-    })
-  })
-
   it("does not substitute another map when the focused prediction has no map", () => {
     expect(selectOccurrenceMap(result, 0.5, "top-without-map")).toEqual({
       status: "unavailable",
@@ -108,56 +80,8 @@ describe("selectOccurrenceMap", () => {
   it("reports which backend explanation layers are actually available", () => {
     expect(getExplanationAvailability(result)).toEqual({
       occurrenceMaps: true,
+      prototypes: false,
       boundingBoxes: false,
     })
-  })
-})
-
-describe("getInitialDisplayThreshold", () => {
-  it("lowers the display threshold to the strongest sub-50% pathology", () => {
-    const lowEvidence: InferenceResult = {
-      ...result,
-      predictions: [
-        {
-          key: "no-finding",
-          labelId: NO_FINDING_ID,
-          label: "No Finding",
-          probability: 0.889,
-          predicted: true,
-          thresholdMargin: 0.389,
-          thresholdBorderline: false,
-          reasoning: null,
-          occurrenceMapUrl: "data:image/png;base64,NOFINDING",
-        },
-        {
-          key: "atelectasis",
-          labelId: 1,
-          label: "Atelectasis",
-          probability: 0.274,
-          predicted: false,
-          thresholdMargin: -0.226,
-          thresholdBorderline: false,
-          reasoning: null,
-          occurrenceMapUrl: "data:image/png;base64,ATELECTASIS",
-        },
-        {
-          key: "lung-opacity",
-          labelId: 7,
-          label: "Lung Opacity",
-          probability: 0.224,
-          predicted: false,
-          thresholdMargin: -0.276,
-          thresholdBorderline: false,
-          reasoning: null,
-          occurrenceMapUrl: "data:image/png;base64,OPACITY",
-        },
-      ],
-    }
-
-    expect(getInitialDisplayThreshold(lowEvidence)).toBe(0.27)
-  })
-
-  it("keeps the model threshold when a pathology reaches 50%", () => {
-    expect(getInitialDisplayThreshold(result)).toBe(result.modelThreshold)
   })
 })

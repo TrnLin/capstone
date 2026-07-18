@@ -13,12 +13,15 @@ import type { InferencePrediction, InferenceResult } from "~/lib/inference"
 import { LABELS_BY_ID, NO_FINDING_ID } from "~/lib/labels"
 import { cn } from "~/lib/utils"
 
+import { ExplanationImage } from "./explanation-image"
+
 type PredictionListProps = {
   result: InferenceResult | null
   loading: boolean
   displayThreshold: number
   activePredictionKey: string | null
   onFocusPrediction: (key: string | null) => void
+  onOpenPrototypeGallery: (key: string) => void
 }
 
 export function PredictionList({
@@ -27,6 +30,7 @@ export function PredictionList({
   displayThreshold,
   activePredictionKey,
   onFocusPrediction,
+  onOpenPrototypeGallery,
 }: PredictionListProps) {
   if (loading) return <PredictionListSkeleton />
   if (!result) {
@@ -92,6 +96,7 @@ export function PredictionList({
               displayThreshold={displayThreshold}
               isActive={activePredictionKey === prediction.key}
               onFocusPrediction={onFocusPrediction}
+              onOpenPrototypeGallery={onOpenPrototypeGallery}
             />
           ))}
       </div>
@@ -105,18 +110,23 @@ function PredictionRow({
   displayThreshold,
   isActive,
   onFocusPrediction,
+  onOpenPrototypeGallery,
 }: {
   prediction: InferencePrediction
   result: InferenceResult
   displayThreshold: number
   isActive: boolean
   onFocusPrediction: (key: string | null) => void
+  onOpenPrototypeGallery: (key: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const label =
     prediction.labelId === null ? null : LABELS_BY_ID[prediction.labelId]
   const isNoFinding = prediction.labelId === NO_FINDING_ID
   const isVisible = prediction.probability >= displayThreshold
+  const topPrototypes = result.prototypes
+    .filter((prototype) => prototype.predictionKey === prediction.key)
+    .slice(0, 3)
   const color = label?.color ?? "oklch(0.7 0.03 240)"
 
   return (
@@ -225,6 +235,58 @@ function PredictionRow({
                     "No curated clinical context is available for this backend class."}
                 </p>
               </EvidenceSection>
+
+              {topPrototypes.length > 0 ? (
+                <EvidenceSection title="Backend prototypes">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] text-muted-foreground">
+                      Source-first previews
+                    </span>
+                    <Button
+                      variant="link"
+                      size="xs"
+                      onClick={() => onOpenPrototypeGallery(prediction.key)}
+                      className="min-h-10 p-0 text-xs"
+                    >
+                      Inspect evidence
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    {topPrototypes.map((prototype) => (
+                      <div
+                        key={prototype.prototypeId}
+                        className="flex w-20 flex-col gap-1"
+                      >
+                        <div className="aspect-square overflow-hidden rounded-lg ring-1 ring-foreground/10">
+                          <ExplanationImage
+                            src={
+                              prototype.sourceImageUrl ??
+                              prototype.activationMapUrl
+                            }
+                            alt={`Prototype ${prototype.prototypeId}`}
+                            unavailableText="Source unavailable"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between px-0.5 text-[10px] text-muted-foreground tabular-nums">
+                          <span>
+                            {prototype.similarity === null
+                              ? "—"
+                              : `${(prototype.similarity * 100).toFixed(1)}%`}
+                          </span>
+                          <span>
+                            {prototype.sourceImageUrl ? "SRC" : "ACT"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </EvidenceSection>
+              ) : (
+                <div className="flex items-start gap-2 rounded-lg bg-muted/35 p-2.5 text-[11px] text-muted-foreground">
+                  <SparklesIcon className="mt-0.5 size-3.5 shrink-0" />
+                  No prototype evidence was returned for this prediction.
+                </div>
+              )}
             </div>
           </CollapsibleContent>
         ) : null}
@@ -293,8 +355,8 @@ function decisionText(predicted: boolean | null) {
 
 function NoFindingRow({ prediction }: { prediction: InferencePrediction }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-xl border border-border bg-muted/35 px-3 py-2.5 text-foreground">
-      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
+    <div className="flex items-center gap-2.5 rounded-xl border border-dashed border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5 text-emerald-900 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100">
+      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-emerald-500/15">
         <svg
           viewBox="0 0 14 14"
           className="size-3.5"
@@ -309,11 +371,9 @@ function NoFindingRow({ prediction }: { prediction: InferencePrediction }) {
         </svg>
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">
-          No findings above the model threshold
-        </p>
-        <p className="text-[11px] text-pretty text-muted-foreground">
-          Model output only; this does not rule out clinical disease.
+        <p className="text-sm font-medium">{prediction.label}</p>
+        <p className="text-[11px] text-pretty text-emerald-800/70 dark:text-emerald-200/70">
+          Absence does not rule out clinical disease.
         </p>
       </div>
       <span className="shrink-0 text-sm font-medium tabular-nums">

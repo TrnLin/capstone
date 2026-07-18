@@ -22,7 +22,7 @@ export type HistoryItem = LoadedImage & {
   revokeImageUrl?: boolean
 }
 
-export type OverlayMode = "heatmap" | "boxes" | "off"
+export type OverlayMode = "heatmap" | "boxes" | "prototypes" | "off"
 
 export type DemoStatus = "idle" | "loading" | "ready" | "error"
 

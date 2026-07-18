@@ -5,6 +5,7 @@ import {
   EyeOffIcon,
   LayersIcon,
   SlidersHorizontalIcon,
+  SparklesIcon,
   SplitSquareVerticalIcon,
   XIcon,
 } from "lucide-react"
@@ -54,6 +55,7 @@ export function ControlsPanel({
   const [collapsed, setCollapsed] = useState(false)
   const availability = getExplanationAvailability(result)
   const hasOccurrenceMaps = availability.occurrenceMaps
+  const hasPrototypes = availability.prototypes
   const canCompare = overlayMode === "heatmap" && hasOccurrenceMaps
   const focusedPrediction =
     activePredictionKey !== null
@@ -86,7 +88,7 @@ export function ControlsPanel({
           onClick={() => setCollapsed((c) => !c)}
           aria-expanded={!collapsed}
           aria-label={collapsed ? "Expand controls" : "Collapse controls"}
-          className="ml-auto grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none xl:hidden"
+          className="ml-auto grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none lg:hidden"
         >
           <ChevronDownIcon
             className={cn(
@@ -99,15 +101,14 @@ export function ControlsPanel({
       <div
         className={cn(
           "flex flex-col gap-4",
-          // Collapsed only applies before the full three-column workspace.
-          collapsed && "hidden xl:flex"
+          // Collapsed only applies on mobile; lg+ always shows everything.
+          collapsed && "hidden lg:flex"
         )}
       >
-        <div className="flex flex-col gap-2">
+        <div className="space-y-2">
           <Label>Overlay</Label>
           <ToggleGroup
             orientation="horizontal"
-            spacing={1}
             value={[overlayMode]}
             onValueChange={(arr) => {
               const list = Array.isArray(arr) ? arr : [arr]
@@ -117,7 +118,7 @@ export function ControlsPanel({
               }
             }}
             aria-label="Overlay mode"
-            className="grid w-full grid-cols-2"
+            className="grid w-full grid-cols-2 gap-1"
           >
             <ToggleGroupItem
               value="heatmap"
@@ -137,23 +138,28 @@ export function ControlsPanel({
               Boxes
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="off"
-              aria-label="Overlays off"
-              className="col-span-2"
+              value="prototypes"
+              aria-label="Prototypes overlay"
+              disabled={!hasPrototypes}
             >
+              <SparklesIcon data-icon="inline-start" />
+              Prototypes
+            </ToggleGroupItem>
+            <ToggleGroupItem value="off" aria-label="Overlays off">
               <EyeOffIcon data-icon="inline-start" />
               Off
             </ToggleGroupItem>
           </ToggleGroup>
-          {result && !hasOccurrenceMaps && (
+          {result && (!hasOccurrenceMaps || !hasPrototypes) && (
             <p className="text-[10px] leading-tight text-pretty text-muted-foreground">
-              No occurrence maps were returned. Bounding boxes are not part of
-              the backend response.
+              {!hasOccurrenceMaps ? "No occurrence maps returned. " : ""}
+              {!hasPrototypes ? "No prototype evidence returned. " : ""}
+              Bounding boxes are not part of the backend response.
             </p>
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="space-y-2">
           <div className="flex items-baseline justify-between">
             <Label htmlFor="threshold-slider">Display threshold</Label>
             <span className="text-xs text-foreground tabular-nums">
@@ -182,7 +188,7 @@ export function ControlsPanel({
 
         <div
           className={cn(
-            "flex flex-col gap-2 transition-opacity",
+            "space-y-2 transition-opacity",
             overlayMode === "heatmap"
               ? "opacity-100"
               : "pointer-events-none opacity-40"
@@ -209,7 +215,7 @@ export function ControlsPanel({
           />
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="space-y-2">
           <Label>Compare</Label>
           <Button
             variant={compare ? "default" : "outline"}
@@ -219,7 +225,7 @@ export function ControlsPanel({
             aria-pressed={compare}
             className="w-full justify-center"
           >
-            <SplitSquareVerticalIcon data-icon="inline-start" />
+            <SplitSquareVerticalIcon />
             {compare ? "Comparing side-by-side" : "Side-by-side"}
           </Button>
           {!canCompare && (
@@ -230,7 +236,7 @@ export function ControlsPanel({
         </div>
 
         {focusedPrediction && (
-          <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-background/40 p-2.5">
+          <div className="space-y-1.5 rounded-xl border border-border bg-background/40 p-2.5">
             <div className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
               Focused label
             </div>

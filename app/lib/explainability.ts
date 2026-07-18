@@ -1,5 +1,4 @@
 import type { InferenceResult } from "./inference"
-import { NO_FINDING_ID } from "./labels"
 
 export type OccurrenceMapSelection = {
   status: "available" | "unavailable" | "below-threshold"
@@ -10,6 +9,7 @@ export type OccurrenceMapSelection = {
 
 export type ExplanationAvailability = {
   occurrenceMaps: boolean
+  prototypes: boolean
   boundingBoxes: false
 }
 
@@ -21,31 +21,9 @@ export function getExplanationAvailability(
       result?.predictions.some((prediction) =>
         Boolean(prediction.occurrenceMapUrl)
       ) ?? false,
+    prototypes: (result?.prototypes.length ?? 0) > 0,
     boundingBoxes: false,
   }
-}
-
-export function getInitialDisplayThreshold(result: InferenceResult): number {
-  const highestPathologyProbability = result.predictions.reduce<number | null>(
-    (highest, prediction) => {
-      if (prediction.labelId === NO_FINDING_ID) return highest
-      return highest === null
-        ? prediction.probability
-        : Math.max(highest, prediction.probability)
-    },
-    null
-  )
-
-  if (
-    highestPathologyProbability !== null &&
-    highestPathologyProbability < 0.5
-  ) {
-    // Match the slider's 0.01 step and round down so the top evidence remains
-    // visible even when the backend returns three decimal places.
-    return Math.floor(highestPathologyProbability * 100) / 100
-  }
-
-  return result.modelThreshold
 }
 
 export function selectOccurrenceMap(
@@ -58,7 +36,6 @@ export function selectOccurrenceMap(
       (prediction) => prediction.key === focusedPredictionKey
     )
     if (!focused) return unavailableSelection()
-    if (focused.labelId === NO_FINDING_ID) return unavailableSelection()
     if (focused.probability < displayThreshold) {
       return {
         status: "below-threshold",
@@ -78,7 +55,6 @@ export function selectOccurrenceMap(
   let selected: InferenceResult["predictions"][number] | null = null
   for (const prediction of result.predictions) {
     if (
-      prediction.labelId === NO_FINDING_ID ||
       prediction.probability < displayThreshold ||
       !prediction.occurrenceMapUrl
     ) {
