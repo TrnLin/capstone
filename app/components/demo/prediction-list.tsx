@@ -9,7 +9,11 @@ import {
   CollapsibleTrigger,
 } from "~/components/ui/collapsible"
 import { Skeleton } from "~/components/ui/skeleton"
-import type { InferencePrediction, InferenceResult } from "~/lib/inference"
+import type {
+  InferencePrediction,
+  InferenceResult,
+  PrototypeMatch,
+} from "~/lib/inference"
 import { LABELS_BY_ID, NO_FINDING_ID } from "~/lib/labels"
 import { cn } from "~/lib/utils"
 
@@ -258,14 +262,7 @@ function PredictionRow({
                         className="flex w-20 flex-col gap-1"
                       >
                         <div className="aspect-square overflow-hidden rounded-lg ring-1 ring-foreground/10">
-                          <ExplanationImage
-                            src={
-                              prototype.sourceImageUrl ??
-                              prototype.activationMapUrl
-                            }
-                            alt={`Prototype ${prototype.prototypeId}`}
-                            unavailableText="Source unavailable"
-                          />
+                          <PrototypePreview prototype={prototype} />
                         </div>
                         <div className="flex items-center justify-between px-0.5 text-[10px] text-muted-foreground tabular-nums">
                           <span>
@@ -274,7 +271,12 @@ function PredictionRow({
                               : `${(prototype.similarity * 100).toFixed(1)}%`}
                           </span>
                           <span>
-                            {prototype.sourceImageUrl ? "SRC" : "ACT"}
+                            {prototype.sourceImageUrl &&
+                            prototype.activationMapUrl
+                              ? "OVR"
+                              : prototype.sourceImageUrl
+                                ? "SRC"
+                                : "ACT"}
                           </span>
                         </div>
                       </div>
@@ -292,6 +294,29 @@ function PredictionRow({
         ) : null}
       </div>
     </Collapsible>
+  )
+}
+
+function PrototypePreview({ prototype }: { prototype: PrototypeMatch }) {
+  const showOverlay =
+    prototype.sourceImageUrl !== null && prototype.activationMapUrl !== null
+
+  return (
+    <div className="relative size-full">
+      <ExplanationImage
+        src={prototype.sourceImageUrl ?? prototype.activationMapUrl}
+        alt={`Prototype ${prototype.prototypeId}`}
+        unavailableText="Source unavailable"
+      />
+      {showOverlay ? (
+        <img
+          src={prototype.activationMapUrl!}
+          alt=""
+          className="pointer-events-none absolute inset-0 size-full object-fill opacity-75 mix-blend-screen contrast-125 saturate-150"
+          aria-hidden="true"
+        />
+      ) : null}
+    </div>
   )
 }
 

@@ -357,7 +357,7 @@ function ActivationOverlayLayer({ src }: { src: string }) {
       src={src}
       alt=""
       onError={() => setFailed(true)}
-      className="pointer-events-none absolute inset-0 size-full object-fill opacity-90 contrast-125 saturate-150 mix-blend-screen outline -outline-offset-1 outline-black/10 dark:outline-white/10"
+      className="pointer-events-none absolute inset-0 size-full object-fill opacity-90 mix-blend-screen outline -outline-offset-1 outline-black/10 contrast-125 saturate-150 dark:outline-white/10"
       aria-hidden="true"
     />
   )

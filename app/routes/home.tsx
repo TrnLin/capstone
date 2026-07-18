@@ -411,16 +411,37 @@ export default function Home() {
   }, [])
 
   const handleRemove = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      const item = history.find((h) => h.id === id)
+      if (!item) return
+
+      if (item.backendImageId && sessionToken) {
+        try {
+          await api.deleteImage(item.backendImageId)
+        } catch (e) {
+          setError(messageForError(e))
+          return
+        }
+      }
+
       setHistory((prev) => {
-        const next = prev.filter((h) => h.id !== id)
-        if (activeId === id) {
+        const next = prev.filter((h) => {
+          if (h.id === id) return false
+          if (
+            item.backendImageId &&
+            h.backendImageId === item.backendImageId
+          ) {
+            return false
+          }
+          return true
+        })
+        if (activeId === id || next.every((h) => h.id !== activeId)) {
           setActiveId(next[0]?.id ?? null)
         }
         return next
       })
     },
-    [activeId]
+    [activeId, api, history, sessionToken]
   )
 
   const handleError = useCallback((message: string) => {

@@ -67,7 +67,7 @@ export function ExplanationImage({
         onError={() => setState("error")}
         className={cn(
           "size-full object-cover outline -outline-offset-1 outline-black/10 transition-opacity duration-200 ease-out dark:outline-white/10",
-          state === "ready" ? "opacity-100" : "opacity-0",
+          state === "ready" ? "opacity-70" : "opacity-0",
           imageClassName
         )}
       />

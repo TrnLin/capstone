@@ -33,7 +33,7 @@ type HistoryPanelProps = {
   items: HistoryItem[]
   activeId: string | null
   onSelect: (id: string) => void
-  onRemove: (id: string) => void
+  onRemove: (id: string) => void | Promise<void>
   onUpload: (image: LoadedImage) => void
   onAddSample: (sample: Sample) => void
   onError: (message: string) => void

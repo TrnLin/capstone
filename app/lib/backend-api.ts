@@ -238,6 +238,12 @@ export function createBackendApiClient({
       }
       return response.blob()
     },
+    deleteImage(imageId: string) {
+      return request<{ status: string; id: string }>(
+        `/api/images/${encodeURIComponent(imageId)}`,
+        { method: "DELETE" }
+      )
+    },
   }
 }
 
