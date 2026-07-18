@@ -54,7 +54,7 @@ export function PrototypeGallery({
 
   useEffect(() => {
     setSelectedId(prototypes[0]?.prototypeId ?? null)
-    setMode(prototypes[0]?.sourceImageUrl ? "source" : "activation")
+    setMode(preferredEvidenceMode(prototypes[0]))
   }, [open, predictionKey, prototypes[0]?.prototypeId])
 
   return (
@@ -89,9 +89,7 @@ export function PrototypeGallery({
                     type="button"
                     onClick={() => {
                       setSelectedId(prototype.prototypeId)
-                      setMode(
-                        prototype.sourceImageUrl ? "source" : "activation"
-                      )
+                      setMode(preferredEvidenceMode(prototype))
                     }}
                     className={cn(
                       "min-h-10 rounded-xl bg-muted/35 p-1.5 text-left ring-1 ring-foreground/10 transition-[scale,box-shadow] duration-150 ease-out active:scale-[0.96]",
@@ -104,13 +102,7 @@ export function PrototypeGallery({
                     aria-label={`Inspect prototype ${index + 1}`}
                   >
                     <div className="aspect-square overflow-hidden rounded-lg">
-                      <ExplanationImage
-                        src={
-                          prototype.sourceImageUrl ?? prototype.activationMapUrl
-                        }
-                        alt={`Prototype ${index + 1}`}
-                        unavailableText="No image"
-                      />
+                      <PrototypePreview prototype={prototype} index={index} />
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-1 px-0.5 text-[9px] text-muted-foreground tabular-nums">
                       <span>#{index + 1}</span>
@@ -162,7 +154,7 @@ export function PrototypeGallery({
                 </Badge>
               </div>
 
-              <div className="aspect-[4/3] overflow-hidden rounded-xl bg-black shadow-sm ring-1 ring-black/10 dark:ring-white/10">
+              <div className="aspect-4/3 overflow-hidden rounded-xl bg-black shadow-sm ring-1 ring-black/10 dark:ring-white/10">
                 <PrototypeEvidence prototype={selected} mode={mode} />
               </div>
 
@@ -222,6 +214,13 @@ export function PrototypeGallery({
   )
 }
 
+function preferredEvidenceMode(
+  prototype: PrototypeMatch | undefined
+): EvidenceMode {
+  if (prototype?.sourceImageUrl && prototype.activationMapUrl) return "overlay"
+  return prototype?.sourceImageUrl ? "source" : "activation"
+}
+
 function PrototypeEvidence({
   prototype,
   mode,
@@ -260,14 +259,81 @@ function PrototypeEvidence({
     )
   }
   return (
+    <AlignedPrototypeOverlay
+      prototypeId={prototype.prototypeId}
+      sourceImageUrl={prototype.sourceImageUrl}
+      activationMapUrl={prototype.activationMapUrl}
+    />
+  )
+}
+
+function PrototypePreview({
+  prototype,
+  index,
+}: {
+  prototype: PrototypeMatch
+  index: number
+}) {
+  const showOverlay =
+    prototype.sourceImageUrl !== null && prototype.activationMapUrl !== null
+
+  return (
     <div className="relative size-full">
       <ExplanationImage
-        src={prototype.sourceImageUrl}
-        alt={`Training source with activation for ${prototype.prototypeId}`}
-        unavailableText="Source image was not returned"
-        imageClassName="object-contain"
+        src={prototype.sourceImageUrl ?? prototype.activationMapUrl}
+        alt={`Prototype ${index + 1}`}
+        unavailableText="No image"
       />
-      <ActivationOverlayLayer src={prototype.activationMapUrl} />
+      {showOverlay ? (
+        <ActivationOverlayLayer src={prototype.activationMapUrl!} />
+      ) : null}
+    </div>
+  )
+}
+
+function AlignedPrototypeOverlay({
+  prototypeId,
+  sourceImageUrl,
+  activationMapUrl,
+}: {
+  prototypeId: string
+  sourceImageUrl: string
+  activationMapUrl: string
+}) {
+  const [sourceAspect, setSourceAspect] = useState(3 / 4)
+
+  useEffect(() => {
+    const image = new Image()
+    const updateAspect = () => {
+      if (image.naturalWidth && image.naturalHeight) {
+        setSourceAspect(image.naturalWidth / image.naturalHeight)
+      }
+    }
+    image.onload = updateAspect
+    image.src = sourceImageUrl
+    if (image.complete) updateAspect()
+    return () => {
+      image.onload = null
+    }
+  }, [sourceImageUrl])
+
+  return (
+    <div className="grid size-full place-items-center">
+      <div
+        className={cn(
+          "relative max-h-full max-w-full overflow-hidden",
+          sourceAspect <= 4 / 3 ? "h-full" : "w-full"
+        )}
+        style={{ aspectRatio: sourceAspect }}
+      >
+        <ExplanationImage
+          src={sourceImageUrl}
+          alt={`Training source with activation for ${prototypeId}`}
+          unavailableText="Source image was not returned"
+          imageClassName="object-fill"
+        />
+        <ActivationOverlayLayer src={activationMapUrl} />
+      </div>
     </div>
   )
 }
@@ -291,7 +357,7 @@ function ActivationOverlayLayer({ src }: { src: string }) {
       src={src}
       alt=""
       onError={() => setFailed(true)}
-      className="pointer-events-none absolute inset-0 size-full object-fill opacity-65 mix-blend-screen outline -outline-offset-1 outline-black/10 dark:outline-white/10"
+      className="pointer-events-none absolute inset-0 size-full object-fill opacity-90 contrast-125 saturate-150 mix-blend-screen outline -outline-offset-1 outline-black/10 dark:outline-white/10"
       aria-hidden="true"
     />
   )

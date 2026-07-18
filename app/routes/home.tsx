@@ -24,6 +24,7 @@ import {
   type UserResponse,
 } from "~/lib/backend-api"
 import { normalizeBackendPredictionResponse } from "~/lib/backend-adapter"
+import { initialDisplayThreshold } from "~/lib/explainability"
 import type { InferenceResult } from "~/lib/inference"
 import { SAMPLES, SAMPLES_BY_ID } from "~/lib/samples"
 import type { Sample } from "~/lib/samples"
@@ -432,7 +433,7 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    if (result) setDisplayThreshold(result.modelThreshold)
+    if (result) setDisplayThreshold(initialDisplayThreshold(result))
   }, [activeItem?.id, result?.modelThreshold])
 
   return (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ImageOffIcon, LoaderCircleIcon } from "lucide-react"
 
 import { cn } from "~/lib/utils"
@@ -21,9 +21,18 @@ export function ExplanationImage({
   const [state, setState] = useState<"loading" | "ready" | "error">(
     src ? "loading" : "ready"
   )
+  const imageRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
-    setState(src ? "loading" : "ready")
+    if (!src) {
+      setState("ready")
+      return
+    }
+
+    const image = imageRef.current
+    setState(
+      image?.complete ? (image.naturalWidth > 0 ? "ready" : "error") : "loading"
+    )
   }, [src])
 
   if (!src || state === "error") {
@@ -51,6 +60,7 @@ export function ExplanationImage({
       className={cn("relative size-full overflow-hidden bg-black", className)}
     >
       <img
+        ref={imageRef}
         src={src}
         alt={alt}
         onLoad={() => setState("ready")}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { AlertTriangleIcon, ImageOffIcon, LoaderCircleIcon } from "lucide-react"
 
 import { selectOccurrenceMap } from "~/lib/explainability"
@@ -25,9 +25,18 @@ export function HeatmapOverlay({
   const [imageState, setImageState] = useState<"loading" | "ready" | "error">(
     selection.imageUrl ? "loading" : "ready"
   )
+  const imageRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
-    setImageState(selection.imageUrl ? "loading" : "ready")
+    if (!selection.imageUrl) {
+      setImageState("ready")
+      return
+    }
+
+    const image = imageRef.current
+    setImageState(
+      image?.complete ? (image.naturalWidth > 0 ? "ready" : "error") : "loading"
+    )
   }, [selection.imageUrl])
 
   if (selection.status !== "available" || !selection.imageUrl) {
@@ -55,6 +64,7 @@ export function HeatmapOverlay({
   return (
     <div className="pointer-events-none absolute inset-0">
       <img
+        ref={imageRef}
         src={selection.imageUrl}
         alt=""
         onLoad={() => setImageState("ready")}

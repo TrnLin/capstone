@@ -1,4 +1,5 @@
 import type { InferenceResult } from "./inference"
+import { NO_FINDING_ID } from "./labels"
 
 export type OccurrenceMapSelection = {
   status: "available" | "unavailable" | "below-threshold"
@@ -24,6 +25,30 @@ export function getExplanationAvailability(
     prototypes: (result?.prototypes.length ?? 0) > 0,
     boundingBoxes: false,
   }
+}
+
+export function initialDisplayThreshold(result: InferenceResult): number {
+  const prototypeKeys = new Set(
+    result.prototypes.map((prototype) => prototype.predictionKey)
+  )
+  const pathologies = result.predictions.filter(
+    (prediction) => prediction.labelId !== NO_FINDING_ID
+  )
+  const explainedPathologies = pathologies.filter(
+    (prediction) =>
+      Boolean(prediction.occurrenceMapUrl) || prototypeKeys.has(prediction.key)
+  )
+  const candidates =
+    explainedPathologies.length > 0 ? explainedPathologies : pathologies
+  const highestPathologyProbability = candidates.reduce(
+    (highest, prediction) => Math.max(highest, prediction.probability),
+    0
+  )
+
+  return highestPathologyProbability > 0 &&
+    highestPathologyProbability < result.modelThreshold
+    ? highestPathologyProbability
+    : result.modelThreshold
 }
 
 export function selectOccurrenceMap(
@@ -55,6 +80,7 @@ export function selectOccurrenceMap(
   let selected: InferenceResult["predictions"][number] | null = null
   for (const prediction of result.predictions) {
     if (
+      prediction.labelId === NO_FINDING_ID ||
       prediction.probability < displayThreshold ||
       !prediction.occurrenceMapUrl
     ) {

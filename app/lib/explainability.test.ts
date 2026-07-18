@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   getExplanationAvailability,
+  initialDisplayThreshold,
   selectOccurrenceMap,
 } from "./explainability"
 import type { InferenceResult } from "./inference"
@@ -77,11 +78,71 @@ describe("selectOccurrenceMap", () => {
     })
   })
 
+  it("does not auto-select a no-finding occurrence map", () => {
+    expect(
+      selectOccurrenceMap(
+        {
+          ...result,
+          predictions: [
+            {
+              ...result.predictions[0]!,
+              key: "no-finding",
+              labelId: 14,
+              label: "No finding",
+              probability: 0.99,
+              occurrenceMapUrl: "data:image/png;base64,NONE",
+            },
+            ...result.predictions,
+          ],
+        },
+        0.5,
+        null
+      )
+    ).toMatchObject({
+      predictionKey: "highest-explained",
+      imageUrl: "data:image/png;base64,AAAA",
+    })
+  })
+
   it("reports which backend explanation layers are actually available", () => {
     expect(getExplanationAvailability(result)).toEqual({
       occurrenceMaps: true,
       prototypes: false,
       boundingBoxes: false,
     })
+  })
+})
+
+describe("initialDisplayThreshold", () => {
+  it("drops to the strongest pathology when every pathology is below the model cutoff", () => {
+    expect(
+      initialDisplayThreshold({
+        ...result,
+        predictions: [
+          {
+            ...result.predictions[0]!,
+            labelId: 14,
+            probability: 0.91,
+          },
+          {
+            ...result.predictions[1]!,
+            probability: 0.274,
+          },
+          {
+            ...result.predictions[2]!,
+            probability: 0.24,
+          },
+          {
+            ...result.predictions[0]!,
+            key: "higher-without-evidence",
+            probability: 0.4,
+          },
+        ],
+      })
+    ).toBe(0.274)
+  })
+
+  it("keeps the model cutoff when a pathology reaches it", () => {
+    expect(initialDisplayThreshold(result)).toBe(0.5)
   })
 })
