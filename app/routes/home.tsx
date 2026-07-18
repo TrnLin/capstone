@@ -15,6 +15,7 @@ import { JsonInspector } from "~/components/demo/json-inspector"
 import { PredictionList } from "~/components/demo/prediction-list"
 import { PrototypeGallery } from "~/components/demo/prototype-gallery"
 import { Viewer } from "~/components/demo/viewer"
+import { ScrollArea } from "~/components/ui/scroll-area"
 import {
   ApiError,
   createBackendApiClient,
@@ -427,10 +428,7 @@ export default function Home() {
       setHistory((prev) => {
         const next = prev.filter((h) => {
           if (h.id === id) return false
-          if (
-            item.backendImageId &&
-            h.backendImageId === item.backendImageId
-          ) {
+          if (item.backendImageId && h.backendImageId === item.backendImageId) {
             return false
           }
           return true
@@ -534,16 +532,18 @@ export default function Home() {
                 onClearActive={() => setActivePredictionKey(null)}
                 disabled={!image}
               />
-              <div className="rounded-2xl bg-card p-3 ring-1 ring-foreground/10 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-                <PredictionList
-                  result={result}
-                  loading={status === "loading"}
-                  displayThreshold={displayThreshold}
-                  activePredictionKey={activePredictionKey}
-                  onFocusPrediction={setActivePredictionKey}
-                  onOpenPrototypeGallery={handleOpenGallery}
-                />
-              </div>
+              <ScrollArea className="rounded-2xl bg-card ring-1 ring-foreground/10 lg:min-h-0 lg:flex-1">
+                <div className="p-3 pr-4">
+                  <PredictionList
+                    result={result}
+                    loading={status === "loading"}
+                    displayThreshold={displayThreshold}
+                    activePredictionKey={activePredictionKey}
+                    onFocusPrediction={setActivePredictionKey}
+                    onOpenPrototypeGallery={handleOpenGallery}
+                  />
+                </div>
+              </ScrollArea>
             </div>
           </div>
 

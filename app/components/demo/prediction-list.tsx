@@ -171,7 +171,7 @@ function PredictionRow({
                   variant="ghost"
                   size="icon-xs"
                   aria-label={open ? "Collapse evidence" : "Expand evidence"}
-                  className="-mr-2 size-10"
+                  className="-mr-2 size-8"
                 />
               }
             >
