@@ -19,10 +19,13 @@ export type PrototypeMatch = {
   similarity: number | null
   sourceDistance: number | null
   sourceImageUrl: string | null
+  sourcePatchUrl: string | null
   sourceImageId: string | null
   sourceFilename: string | null
   patchHeight: number | null
   patchWidth: number | null
+  sourceGridHeight: number | null
+  sourceGridWidth: number | null
   activationMapUrl: string | null
 }
 

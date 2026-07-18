@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import {
-  BoxIcon,
-  SparklesIcon,
-  SplitSquareVerticalIcon,
-  XIcon,
-} from "lucide-react"
+import { BoxIcon, SplitSquareVerticalIcon, XIcon } from "lucide-react"
 
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
@@ -12,7 +7,6 @@ import { Skeleton } from "~/components/ui/skeleton"
 import { cn } from "~/lib/utils"
 import type { InferenceResult } from "~/lib/inference"
 
-import { ExplanationImage } from "./explanation-image"
 import { HeatmapOverlay } from "./overlay-heatmap"
 import type { LoadedImage, OverlayMode } from "./types"
 
@@ -115,18 +109,10 @@ export function Viewer({
 
           {result && overlayMode === "boxes" ? <UnavailableBoxes /> : null}
 
-          {result && overlayMode === "prototypes" && (
-            <PrototypeOverlay
-              result={result}
-              displayThreshold={displayThreshold}
-              activePredictionKey={activePredictionKey}
-            />
-          )}
-
           {loading && (
             <div className="absolute inset-0 grid place-items-center">
               <div className="rounded-full bg-black/60 px-3 py-1.5 text-xs text-white backdrop-blur-sm">
-                Running prototype inference…
+                Running inference…
               </div>
             </div>
           )}
@@ -214,95 +200,6 @@ function CompareClip({
       </div>
       <div className="pointer-events-none absolute right-3 bottom-3 rounded-md bg-black/60 px-2 py-0.5 text-[11px] text-white backdrop-blur-sm">
         Original
-      </div>
-    </div>
-  )
-}
-
-function PrototypeOverlay({
-  result,
-  displayThreshold,
-  activePredictionKey,
-}: {
-  result: InferenceResult
-  displayThreshold: number
-  activePredictionKey: string | null
-}) {
-  const prototypeKeys = new Set(
-    result.prototypes.map((prototype) => prototype.predictionKey)
-  )
-  const top = result.predictions.reduce<
-    InferenceResult["predictions"][number] | null
-  >((current, prediction) => {
-    if (
-      prediction.probability < displayThreshold ||
-      !prototypeKeys.has(prediction.key)
-    ) {
-      return current
-    }
-    return !current || prediction.probability > current.probability
-      ? prediction
-      : current
-  }, null)
-  const focusKey = activePredictionKey ?? top?.key ?? null
-  const focusedPrediction = result.predictions.find(
-    (prediction) => prediction.key === focusKey
-  )
-  if (focusKey === null) {
-    return (
-      <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
-        <div className="rounded-xl bg-black/70 px-3 py-2.5 text-xs text-white/80 backdrop-blur-sm">
-          No prototype evidence was returned above the display threshold.
-        </div>
-      </div>
-    )
-  }
-
-  const protos = result.prototypes
-    .filter((prototype) => prototype.predictionKey === focusKey)
-    .slice(0, 3)
-  if (protos.length === 0) {
-    return (
-      <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
-        <div className="rounded-xl bg-black/70 px-3 py-2.5 text-xs text-white/80 backdrop-blur-sm">
-          No prototype evidence was returned for{" "}
-          {focusedPrediction?.label ?? "this prediction"}.
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="absolute top-4 left-4 flex max-w-[min(76%,400px)] flex-col gap-2">
-      <div className="inline-flex w-fit items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-0.5 text-[11px] font-medium text-white/95 backdrop-blur-sm">
-        <SparklesIcon className="size-3" />
-        Backend prototypes · {focusedPrediction?.label ?? "prediction"}
-      </div>
-      <div className="flex items-stretch gap-2">
-        {protos.map((prototype) => (
-          <div
-            key={prototype.prototypeId}
-            className="flex w-28 flex-col gap-1 rounded-xl bg-black/55 p-1.5 ring-1 ring-white/15 backdrop-blur-sm"
-          >
-            <div className="aspect-square w-full overflow-hidden rounded-lg">
-              <ExplanationImage
-                src={prototype.sourceImageUrl ?? prototype.activationMapUrl}
-                alt={`Prototype evidence ${prototype.prototypeId}`}
-                unavailableText="Source unavailable"
-              />
-            </div>
-            <div className="flex items-center justify-between px-1 text-[10px] text-white/90">
-              <span className="tabular-nums">
-                {prototype.similarity === null
-                  ? "—"
-                  : `${(prototype.similarity * 100).toFixed(1)}%`}
-              </span>
-              <span className="tracking-wide text-white/60 uppercase">
-                {prototype.sourceImageUrl ? "source" : "activation"}
-              </span>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   )

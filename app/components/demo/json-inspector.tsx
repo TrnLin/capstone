@@ -67,7 +67,7 @@ export function JsonInspector({ result }: JsonInspectorProps) {
         </div>
         <CollapsibleContent className="overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0">
           <div className="space-y-4 border-t border-border p-4">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
               <ModelMetric
                 label="Model cutoff"
                 value={result.modelThreshold.toFixed(2)}
@@ -79,10 +79,6 @@ export function JsonInspector({ result }: JsonInspectorProps) {
               <ModelMetric
                 label="Predictions"
                 value={String(result.predictions.length)}
-              />
-              <ModelMetric
-                label="Prototypes"
-                value={String(result.prototypes.length)}
               />
               <ModelMetric
                 label="Image ID"

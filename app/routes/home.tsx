@@ -13,7 +13,6 @@ import { DemoHeader } from "~/components/demo/demo-header"
 import { HistoryPanel } from "~/components/demo/history-panel"
 import { JsonInspector } from "~/components/demo/json-inspector"
 import { PredictionList } from "~/components/demo/prediction-list"
-import { PrototypeGallery } from "~/components/demo/prototype-gallery"
 import { Viewer } from "~/components/demo/viewer"
 import {
   ApiError,
@@ -24,6 +23,7 @@ import {
   type UserResponse,
 } from "~/lib/backend-api"
 import { normalizeBackendPredictionResponse } from "~/lib/backend-adapter"
+import { getInitialDisplayThreshold } from "~/lib/explainability"
 import type { InferenceResult } from "~/lib/inference"
 import { SAMPLES, SAMPLES_BY_ID } from "~/lib/samples"
 import type { Sample } from "~/lib/samples"
@@ -50,7 +50,6 @@ function makeId() {
 }
 
 const SESSION_STORAGE_KEY = "muck-session-token"
-const DEFAULT_TOP_K_PROTOS = 3
 const JOB_POLL_INTERVAL_MS = 900
 type BackendApiClient = ReturnType<typeof createBackendApiClient>
 
@@ -68,16 +67,11 @@ export default function Home() {
 
   const [overlayMode, setOverlayMode] = useState<OverlayMode>("heatmap")
   const [displayThreshold, setDisplayThreshold] = useState(0.5)
-  const [heatmapOpacity, setHeatmapOpacity] = useState(0.65)
+  const [heatmapOpacity, setHeatmapOpacity] = useState(0.62)
   const [activePredictionKey, setActivePredictionKey] = useState<string | null>(
     null
   )
   const [compare, setCompare] = useState(false)
-
-  const [galleryOpen, setGalleryOpen] = useState(false)
-  const [galleryPredictionKey, setGalleryPredictionKey] = useState<
-    string | null
-  >(null)
 
   const requestId = useRef(0)
 
@@ -261,7 +255,7 @@ export default function Home() {
       try {
         const file = await fileForHistoryItem(item)
         let job = await api.createPredictionJob(file, {
-          topKProtos: DEFAULT_TOP_K_PROTOS,
+          topKProtos: 0,
           includeTiming: true,
         })
         updateItem(item.id, jobPatch(job))
@@ -426,13 +420,8 @@ export default function Home() {
     setError(message)
   }, [])
 
-  const handleOpenGallery = useCallback((predictionKey: string) => {
-    setGalleryPredictionKey(predictionKey)
-    setGalleryOpen(true)
-  }, [])
-
   useEffect(() => {
-    if (result) setDisplayThreshold(result.modelThreshold)
+    if (result) setDisplayThreshold(getInitialDisplayThreshold(result))
   }, [activeItem?.id, result?.modelThreshold])
 
   return (
@@ -464,8 +453,8 @@ export default function Home() {
             </Alert>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_340px] lg:gap-4 xl:grid-cols-[260px_minmax(0,1fr)_360px]">
-            <div className="lg:sticky lg:top-[72px] lg:h-[calc(100svh-88px)]">
+          <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_320px] xl:gap-4 2xl:grid-cols-[260px_minmax(0,1fr)_360px]">
+            <div className="xl:sticky xl:top-[72px] xl:h-[calc(100svh-88px)]">
               <HistoryPanel
                 items={history}
                 activeId={activeId}
@@ -474,11 +463,11 @@ export default function Home() {
                 onUpload={handleUpload}
                 onAddSample={handleAddSample}
                 onError={handleError}
-                className="h-full"
+                className="xl:h-full"
               />
             </div>
 
-            <div className="flex min-h-[60svh] flex-col lg:sticky lg:top-[72px] lg:h-[calc(100svh-88px)]">
+            <div className="flex min-h-[60svh] flex-col xl:sticky xl:top-[72px] xl:h-[calc(100svh-88px)]">
               {image ? (
                 <Viewer
                   image={image}
@@ -490,14 +479,14 @@ export default function Home() {
                   activePredictionKey={activePredictionKey}
                   onClearActive={() => setActivePredictionKey(null)}
                   compare={compare}
-                  className="h-full"
+                  className="xl:h-full"
                 />
               ) : (
                 <EmptyViewer />
               )}
             </div>
 
-            <div className="flex flex-col gap-4 lg:sticky lg:top-[72px] lg:h-[calc(100svh-88px)]">
+            <div className="flex flex-col gap-4 xl:sticky xl:top-[72px] xl:h-[calc(100svh-88px)]">
               <ControlsPanel
                 overlayMode={overlayMode}
                 onOverlayModeChange={setOverlayMode}
@@ -512,14 +501,13 @@ export default function Home() {
                 onClearActive={() => setActivePredictionKey(null)}
                 disabled={!image}
               />
-              <div className="rounded-2xl bg-card p-3 ring-1 ring-foreground/10 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+              <div className="rounded-2xl bg-card p-3 ring-1 ring-foreground/10 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
                 <PredictionList
                   result={result}
                   loading={status === "loading"}
                   displayThreshold={displayThreshold}
                   activePredictionKey={activePredictionKey}
                   onFocusPrediction={setActivePredictionKey}
-                  onOpenPrototypeGallery={handleOpenGallery}
                 />
               </div>
             </div>
@@ -540,12 +528,6 @@ export default function Home() {
           </footer>
         </div>
       </main>
-      <PrototypeGallery
-        result={result}
-        predictionKey={galleryPredictionKey}
-        open={galleryOpen}
-        onOpenChange={setGalleryOpen}
-      />
       <AuthDialog
         open={authOpen}
         onOpenChange={setAuthOpen}
@@ -566,8 +548,7 @@ function EmptyViewer() {
         </p>
         <p className="text-sm text-muted-foreground">
           Upload a CXR from the left panel, or add one of the curated sample
-          studies to see backend-provided predictions, occurrence maps, and
-          prototype evidence.
+          studies to see backend-provided predictions and occurrence maps.
         </p>
       </div>
     </div>
