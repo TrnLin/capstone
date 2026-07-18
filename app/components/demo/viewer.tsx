@@ -190,22 +190,29 @@ function CompareClip({
       <div
         role="separator"
         aria-orientation="vertical"
+        aria-label="Resize explained and original image comparison"
+        aria-valuemin={2}
+        aria-valuemax={98}
         aria-valuenow={Math.round(split * 100)}
         tabIndex={0}
         onPointerDown={(e) => {
           e.preventDefault()
+          e.currentTarget.setPointerCapture(e.pointerId)
           dragging.current = true
+        }}
+        onPointerCancel={() => {
+          dragging.current = false
         }}
         onKeyDown={(e) => {
           if (e.key === "ArrowLeft") setSplit((s) => Math.max(0.02, s - 0.02))
           if (e.key === "ArrowRight") setSplit((s) => Math.min(0.98, s + 0.02))
         }}
-        className="absolute top-0 bottom-0 z-20 -translate-x-1/2 cursor-col-resize"
+        className="group absolute top-0 bottom-0 z-20 w-12 -translate-x-1/2 cursor-col-resize touch-none outline-none focus-visible:ring-2 focus-visible:ring-white/80"
         style={{ left: `${split * 100}%` }}
       >
-        <div className="pointer-events-none h-full w-px bg-white/80 shadow-[0_0_12px_rgba(0,0,0,0.5)]" />
-        <div className="pointer-events-none absolute top-1/2 left-1/2 grid size-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-black shadow-lg">
-          <SplitSquareVerticalIcon className="size-3.5" />
+        <div className="pointer-events-none absolute top-0 bottom-0 left-1/2 w-0.5 -translate-x-1/2 bg-white/90 shadow-[0_0_12px_rgba(0,0,0,0.5)]" />
+        <div className="pointer-events-none absolute top-1/2 left-1/2 grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-black shadow-xl ring-4 ring-black/25 transition-transform group-active:scale-110">
+          <SplitSquareVerticalIcon className="size-4" />
         </div>
       </div>
 
