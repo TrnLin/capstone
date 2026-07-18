@@ -39,7 +39,7 @@ export function DemoHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-md supports-backdrop-filter:bg-background/60">
-      <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 sm:px-6">
+      <div className="flex h-14 w-full items-center gap-3 px-4 sm:px-6">
         <div className="flex items-center gap-2.5">
           <div className="grid size-8 place-items-center rounded-xl bg-foreground text-background">
             <MuckMark />
