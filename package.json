@@ -3,8 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "react-router build",
-    "build:deploy": "npm run build && node ../scripts/stage-frontend.mjs",
+    "build": "react-router build && node ./scripts/stage-to-backend.mjs",
+    "build:only": "react-router build",
+    "build:deploy": "npm run build",
+    "stage": "node ./scripts/stage-to-backend.mjs",
     "dev": "react-router dev",
     "preview": "vite preview --outDir build/client",
     "test": "vitest run",
