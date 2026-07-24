@@ -98,11 +98,15 @@ type RequestOptions = Omit<RequestInit, "headers"> & {
   auth?: boolean
 }
 
-const DEFAULT_API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-    /\/$/,
-    ""
-  ) || "http://127.0.0.1:8080"
+function resolveDefaultApiBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_BASE_URL
+  if (configured !== undefined) {
+    return String(configured).replace(/\/$/, "")
+  }
+  return import.meta.env.PROD ? "" : "http://127.0.0.1:8080"
+}
+
+const DEFAULT_API_BASE_URL = resolveDefaultApiBaseUrl()
 
 export class ApiError extends Error {
   status: number

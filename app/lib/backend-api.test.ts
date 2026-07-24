@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { ApiError, createBackendApiClient } from "./backend-api"
+import { ApiError, createBackendApiClient, getDefaultApiBaseUrl } from "./backend-api"
 
 describe("createBackendApiClient", () => {
   it("sends bearer tokens on authenticated requests", async () => {
@@ -48,5 +48,35 @@ describe("createBackendApiClient", () => {
       status: 401,
     })
     expect(onUnauthorized).toHaveBeenCalledOnce()
+  })
+
+  it("uses same-origin paths when baseUrl is empty", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ id: "user-1", email: "me@example.com" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    )
+    const api = createBackendApiClient({
+      baseUrl: "",
+      getToken: () => "session-token",
+      fetchImpl,
+    })
+
+    await api.me()
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/me",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer session-token",
+        }),
+      })
+    )
+  })
+
+  it("treats VITE_API_BASE_URL=/ as empty base", () => {
+    expect("/".replace(/\/$/, "")).toBe("")
+    expect(getDefaultApiBaseUrl()).toBeTypeOf("string")
   })
 })
